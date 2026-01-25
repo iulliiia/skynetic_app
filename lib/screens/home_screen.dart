@@ -174,8 +174,7 @@ class _HomeContentState extends State<HomeContent> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => PhotoDetailScreen(
-                                imagePath: scan.imagePath,
-                                classId: scan.classId,
+                                scan: scan,
                               ),
                             ),
                           );

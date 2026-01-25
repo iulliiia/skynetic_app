@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 
 import 'package:skynetic_app/screens/scan_result_screen.dart';
 import 'package:skynetic_app/theme/app_theme.dart';
@@ -94,7 +93,7 @@ class ScanScreen extends StatelessWidget {
             _buildActionCard(
               context,
               icon: Icons.camera_alt_outlined,
-              title: 'Fă o fotografie',
+              title: 'Fotografiază',
               description: 'Deschide camera pentru a face o poză leziunii',
               onTap: () => _pickImage(context, ImageSource.camera),
             ),

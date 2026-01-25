@@ -1,9 +1,9 @@
 class Recommendations {
   Recommendations._internal() {
     recommendations = <int, String>{
-      0: 'Monitorizează lunar și consultă un dermatolog dacă apar modificări.',
-      1: 'Este recomandat sa consulti un doctor cat mai rapid.',
-      2: 'Pielea ta este normala, nu ai de ce sa iti faci griji.'
+      0: 'Leziunea are grad de risc scăzut, dar este important să fii atent la orice schimbare. Monitorizează lunar zona afectată și programează un consult dermatologic dacă observi modificări de formă, culoare, dimensiune sau textură.',
+      1: 'Nu te panica! Aplicația oferă doar o evaluare orientativă, nu un diagnostic validat clinic. Îți recomandăm să consulți un medic dermatolog cât mai curând posibil pentru o examinare completă și un diagnostic concret.',
+      2: 'Pielea ta arată bine, nu s-au identificat leziuni. Pentru a menține sănătatea pielii, îți recomandăm să vizitezi secțiunea noastră de prevenție și îngrijire, unde vei găsi sfaturi utile pentru protecție și auto-monitorizare.'
     };
   }
 

@@ -16,8 +16,9 @@ class Api {
   Api._internal() {
     _dio = Dio(
       BaseOptions(
-        baseUrl:
-            kDebugMode ? 'http://10.0.2.2:5000' : 'http://192.168.1.230:5000',
+        baseUrl: kDebugMode
+            ? 'http://10.0.2.2:5000'
+            : 'https://eldie.ro/api/v1/skynetic',
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 10),
       ),

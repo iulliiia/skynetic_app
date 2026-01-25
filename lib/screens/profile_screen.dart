@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:skynetic_app/models/saved_scans.dart';
 import 'package:skynetic_app/screens/photo_detail_screen.dart';
 import 'package:skynetic_app/theme/app_theme.dart';
+import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -12,61 +13,249 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  Widget _buildDialogOption(String text, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: AppColors.accent1.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: AppColors.primary,
-          ),
-        ),
-      ),
-    );
-  }
-
   List<SavedScan> _displayedScans = [];
-  String _filter = 'Toate';
-  String _sortOrder = 'newest';
+  List<SavedScan> _allScans = [];
   Set<SavedScan> _selectedScans = {};
+  bool _showFilters = false;
+
+  // Filter variables
+  String? selectedBodySide;
+  String? selectedLateralSide;
+  String? selectedBodyPart;
+  DateTimeRange? selectedDateRange;
+  final TextEditingController tagSearchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadAndApplyFilters();
+    _loadScans();
   }
 
-  Future<void> _loadAndApplyFilters() async {
+  Future<void> _loadScans() async {
     await SavedScans.load();
-    _applyFilters();
+    setState(() {
+      _allScans = List.from(SavedScans.list);
+      _displayedScans = List.from(SavedScans.list);
+    });
   }
 
   void _applyFilters() {
-    List<SavedScan> scans = List.from(SavedScans.list);
+    List<SavedScan> filteredScans = _allScans;
 
-    if (_filter == 'Pozitive') {
-      scans = scans.where((scan) => scan.classId != 1).toList();
-    } else if (_filter == 'Negative') {
-      scans = scans.where((scan) => scan.classId == 1).toList();
+    // Filter by body side
+    if (selectedBodySide != null) {
+      filteredScans = filteredScans
+          .where((scan) => scan.bodySide == selectedBodySide)
+          .toList();
     }
 
-    if (_sortOrder == 'newest') {
-      scans = scans.reversed.toList();
+    // Filter by lateral side
+    if (selectedLateralSide != null) {
+      filteredScans = filteredScans
+          .where((scan) => scan.lateralSide == selectedLateralSide)
+          .toList();
+    }
+
+    // Filter by body part
+    if (selectedBodyPart != null) {
+      filteredScans = filteredScans
+          .where((scan) => scan.bodyPart == selectedBodyPart)
+          .toList();
+    }
+
+    // Filter by date range
+    if (selectedDateRange != null) {
+      filteredScans = filteredScans.where((scan) {
+        return scan.scanDate.isAfter(
+                selectedDateRange!.start.subtract(const Duration(days: 1))) &&
+            scan.scanDate
+                .isBefore(selectedDateRange!.end.add(const Duration(days: 1)));
+      }).toList();
+    }
+
+    // Filter by tag search
+    if (tagSearchController.text.isNotEmpty) {
+      final searchTerm = tagSearchController.text.toLowerCase();
+      filteredScans = filteredScans
+          .where((scan) => scan.uniqueTag.toLowerCase().contains(searchTerm))
+          .toList();
     }
 
     setState(() {
-      _displayedScans = scans;
+      _displayedScans = filteredScans;
     });
+  }
+
+  void _clearFilters() {
+    setState(() {
+      selectedBodySide = null;
+      selectedLateralSide = null;
+      selectedBodyPart = null;
+      selectedDateRange = null;
+      tagSearchController.clear();
+      _displayedScans = _allScans;
+    });
+  }
+
+  Color _getColorForClassId(int classId) {
+    switch (classId) {
+      case 0:
+        return Colors.green;
+      case 1:
+        return Colors.red;
+      case 2:
+        return Colors.teal;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _buildFilterSection() {
+    return Card(
+      margin: const EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Filtrează scanările',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: Icon(
+                      _showFilters ? Icons.expand_less : Icons.expand_more),
+                  onPressed: () {
+                    setState(() {
+                      _showFilters = !_showFilters;
+                    });
+                  },
+                ),
+              ],
+            ),
+            if (_showFilters) ...[
+              const SizedBox(height: 16),
+
+              // Tag search
+              TextField(
+                controller: tagSearchController,
+                decoration: const InputDecoration(
+                  labelText: 'Caută după etichetă',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => _applyFilters(),
+              ),
+              const SizedBox(height: 12),
+
+              // Body side filter
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Partea corpului',
+                  border: OutlineInputBorder(),
+                ),
+                value: selectedBodySide,
+                items: ['Anterior', 'Posterior'].map((side) {
+                  return DropdownMenuItem(value: side, child: Text(side));
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedBodySide = value;
+                  });
+                  _applyFilters();
+                },
+              ),
+              const SizedBox(height: 12),
+
+              // Lateral side filter
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Lateralitate',
+                  border: OutlineInputBorder(),
+                ),
+                value: selectedLateralSide,
+                items: ['Stânga', 'Dreapta', 'Centru'].map((side) {
+                  return DropdownMenuItem(value: side, child: Text(side));
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedLateralSide = value;
+                  });
+                  _applyFilters();
+                },
+              ),
+              const SizedBox(height: 12),
+
+              // Body part filter
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(
+                  labelText: 'Regiunea anatomică',
+                  border: OutlineInputBorder(),
+                ),
+                value: selectedBodyPart,
+                items: _allScans
+                    .map((scan) => scan.bodyPart)
+                    .toSet()
+                    .map((part) =>
+                        DropdownMenuItem(value: part, child: Text(part)))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() {
+                    selectedBodyPart = value;
+                  });
+                  _applyFilters();
+                },
+              ),
+              const SizedBox(height: 12),
+
+              // Date range picker
+              ListTile(
+                title: Text(selectedDateRange == null
+                    ? 'Selectează perioada'
+                    : 'Perioada: ${DateFormat('dd/MM/yyyy').format(selectedDateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(selectedDateRange!.end)}'),
+                leading: const Icon(Icons.date_range),
+                onTap: () async {
+                  final DateTimeRange? picked = await showDateRangePicker(
+                    context: context,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                    initialDateRange: selectedDateRange,
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      selectedDateRange = picked;
+                    });
+                    _applyFilters();
+                  }
+                },
+              ),
+
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _clearFilters,
+                      child: const Text('Șterge filtrele'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _applyFilters,
+                      child: const Text('Aplică filtrele'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteSelectedScans() async {
@@ -78,106 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ));
 
     _selectedScans.clear();
-    _applyFilters();
-  }
-
-  void _showFilterDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.accent1.withOpacity(0.1),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Filtrare după diagnostic',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildDialogOption('Toate', () {
-                setState(() => _filter = 'Toate');
-                Navigator.pop(context);
-                _applyFilters();
-              }),
-              _buildDialogOption('Pozitive', () {
-                setState(() => _filter = 'Pozitive');
-                Navigator.pop(context);
-                _applyFilters();
-              }),
-              _buildDialogOption('Negative', () {
-                setState(() => _filter = 'Negative');
-                Navigator.pop(context);
-                _applyFilters();
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showSortDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.accent1.withOpacity(0.1),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Sortare după dată',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildDialogOption('Cele mai noi', () {
-                setState(() => _sortOrder = 'newest');
-                Navigator.pop(context);
-                _applyFilters();
-              }),
-              _buildDialogOption('Cele mai vechi', () {
-                setState(() => _sortOrder = 'oldest');
-                Navigator.pop(context);
-                _applyFilters();
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
+    _loadScans();
   }
 
   @override
@@ -192,54 +282,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onPressed: _deleteSelectedScans,
                 )
               ]
-            : null,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Scanări salvate',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
-                ),
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: _showFilterDialog,
-                      icon: const Icon(Icons.filter_alt_outlined),
-                    ),
-                    IconButton(
-                      onPressed: _showSortDialog,
-                      icon: const Icon(Icons.sort),
-                    ),
-                  ],
-                ),
+            : [
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _loadScans,
+                )
               ],
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: _displayedScans.isEmpty
-                  ? const Center(
-                      child: Text('Nu ai salvat nicio scanare încă.'))
-                  : GridView.builder(
+      ),
+      body: Column(
+        children: [
+          _buildFilterSection(),
+          Expanded(
+            child: _displayedScans.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.folder_open, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text(
+                          'Nu ai salvat nicio scanare încă.',
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: GridView.builder(
                       itemCount: _displayedScans.length,
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 0.8,
                       ),
                       itemBuilder: (context, index) {
                         final scan = _displayedScans[index];
                         final isSelected = _selectedScans.contains(scan);
+                        final statusColor = _getColorForClassId(scan.classId);
+
                         return GestureDetector(
                           onLongPress: () {
                             setState(() {
@@ -263,39 +346,102 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
                                   builder: (_) => PhotoDetailScreen(
-                                    imagePath: scan.imagePath,
-                                    classId: scan.classId,
+                                    scan: scan,
                                   ),
                                 ),
                               );
                             }
                           },
-                          child: Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(
-                                  File(scan.imagePath),
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                ),
+                          child: Card(
+                            elevation: 4,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: statusColor,
+                                width: 3,
                               ),
-                              if (isSelected)
-                                const Positioned(
-                                  top: 4,
-                                  right: 4,
-                                  child: Icon(Icons.check_circle,
-                                      color: Colors.redAccent),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: const BorderRadius.only(
+                                          topLeft: Radius.circular(12),
+                                          topRight: Radius.circular(12),
+                                        ),
+                                        child: Image.file(
+                                          File(scan.imagePath),
+                                          fit: BoxFit.cover,
+                                          width: double.infinity,
+                                          height: double.infinity,
+                                        ),
+                                      ),
+                                      if (isSelected)
+                                        const Positioned(
+                                          top: 8,
+                                          left: 8,
+                                          child: Icon(
+                                            Icons.check_circle,
+                                            color: Colors.blue,
+                                            size: 24,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                            ],
+                                Expanded(
+                                  flex: 2,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          scan.uniqueTag,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          scan.locationLabel,
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          DateFormat('dd/MM/yyyy')
+                                              .format(scan.scanDate),
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       },
                     ),
-            ),
-          ],
-        ),
+                  ),
+          ),
+        ],
       ),
     );
   }

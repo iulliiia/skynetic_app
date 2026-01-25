@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class AppColors {
   // App colors based on provided palette
   static const Color primary = Color.fromARGB(255, 49, 73, 103);
-  static const Color secondary = Color.fromARGB(255, 130, 149, 255);
+  static const Color secondary = Color.fromRGBO(130, 149, 255, 1);
   static const Color accent1 = Color.fromARGB(255, 61, 66, 130);
   static const Color accent2 = Color.fromARGB(255, 214, 155, 180);
   static const Color accent3 = Color.fromARGB(255, 146, 83, 128);

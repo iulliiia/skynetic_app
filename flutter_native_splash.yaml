@@ -1,0 +1,14 @@
+flutter_native_splash:
+  web: false
+
+  color: "#bbd0ff"
+  image: assets\images\dry-skin-splash.png
+  color_dark: "#1c100f"
+  image_dark: assets\images\dry-skin-splash.png
+
+  android_12:
+    image: assets\images\dry-skin-splash.png
+    color: "#bbd0ff"
+    image_dark: assets\images\dry-skin-splash.png
+    color_dark: "#bbd0ff"
+    web: false

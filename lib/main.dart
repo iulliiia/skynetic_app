@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:skynetic_app/screens/splash_screen.dart';
+import 'package:skynetic_app/screens/home_screen.dart';
 import 'package:skynetic_app/theme/app_theme.dart';
 import 'package:skynetic_app/utils/shared_prefs.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('ro_RO', null);
   await SharedPrefs.init();
   runApp(const MyApp());
 }
@@ -18,7 +20,7 @@ class MyApp extends StatelessWidget {
       title: 'skynetic_app',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: const SplashScreen(),
+      home: const HomeScreen(),
     );
   }
 }

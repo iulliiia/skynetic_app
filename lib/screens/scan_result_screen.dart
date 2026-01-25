@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:skynetic_app/api/api.dart';
 import 'package:skynetic_app/models/recommendation.dart';
@@ -22,6 +23,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   ScanResult? _scanResult;
   bool _error = false;
   bool _showResult = false;
+  bool _consentGiven = false;
 
   late final PageController _pageController;
 
@@ -44,14 +46,12 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
 
     try {
       final result = await Api().predictImage(widget.imageFile);
-
       setState(() {
         _scanResult = result;
         _showResult = true;
       });
     } catch (err) {
       log(err.toString());
-
       setState(() {
         _error = true;
       });
@@ -62,35 +62,286 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     });
   }
 
-  void _saveScan() async {
-    if (_scanResult == null) return;
+  void _openSaveScanDialog() {
+    final TextEditingController tagController = TextEditingController();
+    final TextEditingController notesController = TextEditingController();
 
-    final diagnosis = classes[_scanResult!.classId];
+    String? selectedBodySide;
+    String? selectedLateralSide;
+    String? selectedMainBodyPart;
+    String? selectedSubBodyPart;
 
-    if (diagnosis == null) return;
+    final bodySideOptions = ['Anterior', 'Posterior '];
+    final lateralSideOptions = ['Stânga', 'Dreapta', 'Centru'];
 
-    final scan = SavedScan(
-      imagePath: widget.imageFile.path,
-      classId: _scanResult!.classId,
+    final Map<String, List<String>> bodyPartsHierarchy = {
+      'Cap': ['Scalp', 'Frunte', 'Tâmple'],
+      'Față': ['Obraz', 'Nas', 'Bărbie'],
+      'Abdomen': ['Superior', 'Inferior'],
+      'Spate': ['Superior', 'Mijloc', 'Inferior'],
+      'Braț': ['Superior', 'Inferior'],
+      'Mână': ['Palmă', 'Dosul mâinii', 'Degete mână'],
+      'Picior': ['Talpă', 'Dosul piciorului', 'Degete picior'],
+    };
+
+    final List<String> mainBodyParts = [
+      ...bodyPartsHierarchy.keys,
+      'Gât',
+      'Piept',
+      'Axilă',
+      'Umăr',
+      'Coapsă',
+      'Gambă',
+      'Cot',
+      'Antebraț',
+      'Încheietura mâinii',
+      'Șold',
+      'Genunchi',
+      'Gleznă',
+      'Zona inghinală',
+      'Zona genitală',
+      'Zona perianală',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          contentPadding: const EdgeInsets.all(20),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Salvează scanarea',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return SizedBox(
+                width: MediaQuery.of(context).size.width * 0.9,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Etichetă
+                      TextFormField(
+                        controller: tagController,
+                        decoration: const InputDecoration(
+                          labelText: 'Etichetă unică *',
+                          hintText: 'Ex: Semn spate, Aluniță braț',
+                          prefixIcon: Icon(Icons.label_outline),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Partea corpului
+                      DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(
+                          labelText: 'Partea corpului *',
+                          prefixIcon: Icon(Icons.accessibility_new),
+                        ),
+                        value: selectedBodySide,
+                        items: bodySideOptions.map((side) {
+                          return DropdownMenuItem(
+                            value: side,
+                            child: Text(side),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedBodySide = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Lateralitate
+                      DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(
+                          labelText: 'Lateralitate *',
+                          prefixIcon: Icon(Icons.compare_arrows),
+                        ),
+                        value: selectedLateralSide,
+                        items: lateralSideOptions.map((side) {
+                          return DropdownMenuItem(
+                            value: side,
+                            child: Text(side),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedLateralSide = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Regiune principală
+                      DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(
+                          labelText: 'Regiunea anatomică *',
+                          prefixIcon: Icon(Icons.person_outline),
+                        ),
+                        value: selectedMainBodyPart,
+                        isExpanded: true,
+                        items: mainBodyParts.map((part) {
+                          return DropdownMenuItem(
+                            value: part,
+                            child: Text(part),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            selectedMainBodyPart = value;
+                            selectedSubBodyPart = null;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Regiune secundară (dacă e cazul)
+                      if (selectedMainBodyPart != null &&
+                          bodyPartsHierarchy.containsKey(selectedMainBodyPart!))
+                        DropdownButtonFormField<String>(
+                          decoration: const InputDecoration(
+                            labelText: 'Detaliu regiune',
+                            prefixIcon: Icon(Icons.segment),
+                          ),
+                          value: selectedSubBodyPart,
+                          isExpanded: true,
+                          items: bodyPartsHierarchy[selectedMainBodyPart!]!
+                              .map((subPart) {
+                            return DropdownMenuItem(
+                              value: subPart,
+                              child: Text(subPart),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              selectedSubBodyPart = value;
+                            });
+                          },
+                        ),
+                      const SizedBox(height: 16),
+
+                      // Note
+                      TextFormField(
+                        controller: notesController,
+                        decoration: const InputDecoration(
+                          labelText: 'Note adiționale (opțional)',
+                          hintText: 'Ex: leziune mai mare decât luna trecută',
+                          prefixIcon: Icon(Icons.note_outlined),
+                        ),
+                        maxLines: 2,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '* Câmpuri obligatorii',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Anulează'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                // Validări
+                if (tagController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Eticheta unică este obligatorie')),
+                  );
+                  return;
+                }
+
+                if (selectedBodySide == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Selectează partea corpului')),
+                  );
+                  return;
+                }
+
+                if (selectedLateralSide == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Selectează lateralitatea')),
+                  );
+                  return;
+                }
+
+                if (selectedMainBodyPart == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Selectează regiunea anatomică')),
+                  );
+                  return;
+                }
+
+                final String fullBodyPart = selectedSubBodyPart != null
+                    ? '$selectedMainBodyPart - $selectedSubBodyPart'
+                    : selectedMainBodyPart!;
+                final locationLabel =
+                    '$selectedBodySide - $selectedLateralSide - $fullBodyPart';
+
+                final scan = SavedScan(
+                  imagePath: widget.imageFile.path,
+                  classId: _scanResult!.classId,
+                  locationLabel: locationLabel,
+                  uniqueTag: tagController.text.trim(),
+                  bodySide: selectedBodySide!,
+                  lateralSide: selectedLateralSide!,
+                  bodyPart: selectedMainBodyPart!,
+                  subBodyPart: selectedSubBodyPart,
+                  notes: notesController.text.trim().isEmpty
+                      ? null
+                      : notesController.text.trim(),
+                  scanDate: DateTime.now(),
+                );
+
+                await SavedScans.save(scan);
+
+                if (mounted) {
+                  Navigator.of(context).pop(); // Închide dialog
+                  Navigator.of(context).pop(); // Închide ecran
+                }
+              },
+              child: const Text('Salvează'),
+            ),
+          ],
+        );
+      },
     );
+  }
 
-    await SavedScans.save(scan);
-
-    if (mounted) {
-      Navigator.of(context).pop();
+  Color getColorForClassConfidence(int classId, double confidence) {
+    final clampedConfidence = confidence.clamp(0.0, 1.0);
+    switch (classId) {
+      case 0:
+        return Color.lerp(Colors.yellow, const Color.fromARGB(211, 0, 176, 18),
+            clampedConfidence)!;
+      case 1:
+        return Color.lerp(Colors.orange, const Color.fromARGB(255, 198, 36, 36),
+            clampedConfidence)!;
+      case 2:
+        return Color.lerp(Colors.grey.shade300,
+            const Color.fromARGB(255, 58, 189, 176), clampedConfidence)!;
+      default:
+        return Colors.grey;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (args == 'saved') {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Scanarea a fost salvată cu succes!')),
-        );
-      });
-    }
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
@@ -115,14 +366,14 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              Text('Ceva nu a functionat...'),
+                              const Text('Ceva nu a funcționat...'),
                               const SizedBox(height: 12),
                               OutlinedButton.icon(
                                 onPressed: () => setState(() {
                                   _error = false;
                                 }),
                                 icon: const Icon(Icons.refresh),
-                                label: const Text('Reîncearca'),
+                                label: const Text('Reîncearcă'),
                                 style: OutlinedButton.styleFrom(
                                   minimumSize: const Size(double.infinity, 56),
                                 ),
@@ -139,23 +390,21 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                     children: [
                                       ResultCard(
                                         title:
-                                            "Diagnostic: ${classes[_scanResult!.classId]!}",
-                                        subtitle:
-                                            "Acuratete: ${(_scanResult!.confidence * 100).toStringAsFixed(2)}%",
+                                            "${classes[_scanResult!.classId]!}",
+                                        subtitle: Recommendations()
+                                            .get(_scanResult!.classId),
                                         icon: '🩺',
-                                      ),
-                                      ResultCard(
-                                        title: "Recomandare:",
-                                        subtitle:
-                                            " ${Recommendations().get(_scanResult!.classId)}",
-                                        icon: '📋',
+                                        color: getColorForClassConfidence(
+                                          _scanResult!.classId,
+                                          _scanResult!.confidence,
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
                                 const SizedBox(height: 16),
                                 ElevatedButton.icon(
-                                  onPressed: _saveScan,
+                                  onPressed: _openSaveScanDialog,
                                   icon: const Icon(Icons.save_alt),
                                   label: const Text('Salvează rezultatul'),
                                   style: ElevatedButton.styleFrom(
@@ -168,8 +417,47 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                           : Column(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
+                                SvgPicture.asset(
+                                  'assets/images/info.svg',
+                                  height: 60,
+                                ),
+                                const SizedBox(height: 12),
+                                Card(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  color: Colors.blue.shade50,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Checkbox(
+                                          value: _consentGiven,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _consentGiven = value ?? false;
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Expanded(
+                                          child: Text(
+                                            'Confirm că am înțeles și sunt de acord cu faptul că această aplicație are un scop exclusiv informativ și educativ, fără a oferi un diagnostic medical validat clinic. '
+                                            'În cazul oricărei suspiciuni legate de sănătatea pielii, mă angajez să consult un medic specialist.',
+                                            style: const TextStyle(
+                                                fontSize: 14, height: 1.4),
+                                            textAlign: TextAlign.justify,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
                                 ElevatedButton.icon(
-                                  onPressed: _getResult,
+                                  onPressed: _consentGiven ? _getResult : null,
                                   icon: const Icon(Icons.analytics_outlined),
                                   label: const Text('Obține rezultatul'),
                                   style: ElevatedButton.styleFrom(

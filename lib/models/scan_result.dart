@@ -13,7 +13,7 @@ class ScanResult {
 }
 
 final classes = <int, String>{
-  0: 'Benign',
-  1: 'Malign',
-  2: 'Normal',
+  0: 'Grad de risc scăzut',
+  1: 'Grad de risc crescut',
+  2: 'Piele curată (nicio leziune detectată)',
 };

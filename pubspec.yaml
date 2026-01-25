@@ -30,6 +30,12 @@ dependencies:
   image_picker: ^1.1.2
   dio: ^5.8.0+1
   image_cropper: ^9.1.0
+  location: ^7.0.1
+  google_maps_flutter: ^2.6.0
+  flutter_svg: ^2.1.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
+  intl: ^0.18.1
 
 dev_dependencies:
   flutter_test:
@@ -52,6 +58,8 @@ flutter:
     - assets/images/scan1.jpg
     - assets/images/scan2.jpg
     - assets/images/scan3.jpg
+    - assets/images/info.svg
+    - assets/images/dry-skin.svg
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
