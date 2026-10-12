@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:skynetic_app/widgets/responsive_center.dart';
 import 'package:skynetic_app/models/saved_scans.dart';
 import 'package:skynetic_app/screens/learn_screen.dart';
 import 'package:skynetic_app/screens/photo_detail_screen.dart';
@@ -72,152 +73,155 @@ class _HomeContentState extends State<HomeContent> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Bine ai venit!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Gata să ai grijă de pielea ta? Alege ce facem azi.',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 10),
-              ActionCard(
-                title: 'Fă/încarcă o fotografie',
-                subtitle:
-                    'Trimite o imagine cu pielea ta pentru a o analiza automat.',
-                icon: Icons.camera_alt_outlined,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ScanScreen()),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              ActionCard(
-                title: 'Urmărește evoluția',
-                subtitle:
-                    'Consultă rezultatele anterioare ale scanărilor tale.',
-                icon: Icons.history,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              ActionCard(
-                title: 'Ai grija de pielea ta',
-                subtitle:
-                    'Care sunt tipurile de cancer de piele. Simptome și prevenție.',
-                icon: Icons.book_outlined,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const LearnScreen()),
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Scanări recente',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (recentScans.isEmpty)
-                Column(
-                  children: [
-                    Icon(
-                      Icons.history,
-                      size: 48,
-                      color: AppColors.accent1.withValues(alpha: 0.5),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Nicio scanare recentă',
-                      style: TextStyle(
-                        color: AppColors.textSecondary.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: recentScans.length + 1,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
+          child: ResponsiveCenter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Bine ai venit!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
                   ),
-                  itemBuilder: (context, index) {
-                    if (index < recentScans.length) {
-                      final scan = recentScans[index];
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => PhotoDetailScreen(
-                                scan: scan,
-                              ),
-                            ),
-                          );
-                        },
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            File(scan.imagePath),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      );
-                    } else {
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                                builder: (_) => const ProfileScreen()),
-                          );
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            color: AppColors.accent1.withValues(alpha: 0.1),
-                            border: Border.all(color: AppColors.accent1),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              'Vezi arhiva',
-                              style: TextStyle(
-                                color: AppColors.accent1,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                      );
-                    }
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Gata să ai grijă de pielea ta? Alege ce facem azi.',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ActionCard(
+                  title: 'Fă/încarcă o fotografie',
+                  subtitle:
+                      'Trimite o imagine cu pielea ta pentru a o analiza automat.',
+                  icon: Icons.camera_alt_outlined,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ScanScreen()),
+                    );
                   },
                 ),
-              const SizedBox(height: 24),
-            ],
+                const SizedBox(height: 8),
+                ActionCard(
+                  title: 'Urmărește evoluția',
+                  subtitle:
+                      'Consultă rezultatele anterioare ale scanărilor tale.',
+                  icon: Icons.history,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                ActionCard(
+                  title: 'Ai grija de pielea ta',
+                  subtitle:
+                      'Care sunt tipurile de cancer de piele. Simptome și prevenție.',
+                  icon: Icons.book_outlined,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const LearnScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Scanări recente',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (recentScans.isEmpty)
+                  Column(
+                    children: [
+                      Icon(
+                        Icons.history,
+                        size: 48,
+                        color: AppColors.accent1.withValues(alpha: 0.5),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Nicio scanare recentă',
+                        style: TextStyle(
+                          color: AppColors.textSecondary.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: recentScans.length + 1,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemBuilder: (context, index) {
+                      if (index < recentScans.length) {
+                        final scan = recentScans[index];
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => PhotoDetailScreen(
+                                  scan: scan,
+                                ),
+                              ),
+                            );
+                          },
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(scan.imagePath),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        );
+                      } else {
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) => const ProfileScreen()),
+                            );
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              color: AppColors.accent1.withValues(alpha: 0.1),
+                              border: Border.all(color: AppColors.accent1),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'Vezi arhiva',
+                                style: TextStyle(
+                                  color: AppColors.accent1,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),

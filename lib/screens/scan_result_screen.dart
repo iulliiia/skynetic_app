@@ -25,20 +25,6 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   bool _showResult = false;
   bool _consentGiven = false;
 
-  late final PageController _pageController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController(initialPage: 0);
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
   void _getResult() async {
     setState(() {
       _loading = true;
@@ -308,11 +294,12 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                   scanDate: DateTime.now(),
                 );
 
+                final navigator = Navigator.of(context);
                 await SavedScans.save(scan);
 
                 if (mounted) {
-                  Navigator.of(context).pop(); // Închide dialog
-                  Navigator.of(context).pop(); // Închide ecran
+                  navigator.pop(); // Închide dialog
+                  navigator.pop(); // Închide ecran
                 }
               },
               child: const Text('Salvează'),
@@ -346,130 +333,39 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Previzualizare scanare')),
-      body: Column(
-        children: [
-          SizedBox(
-            height: screenHeight * 0.4,
-            width: double.infinity,
-            child: Image.file(
-              File(widget.imageFile.path),
-              fit: BoxFit.cover,
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: screenHeight * 0.4,
+              width: double.infinity,
+              child: Image.file(
+                File(widget.imageFile.path),
+                fit: BoxFit.cover,
+              ),
             ),
           ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              const Text('Ceva nu a funcționat...'),
-                              const SizedBox(height: 12),
-                              OutlinedButton.icon(
-                                onPressed: () => setState(() {
-                                  _error = false;
-                                }),
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('Reîncearcă'),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(double.infinity, 56),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : _showResult
-                          ? Column(
-                              children: [
-                                Expanded(
-                                  child: PageView(
-                                    controller: _pageController,
-                                    children: [
-                                      ResultCard(
-                                        title:
-                                            classes[_scanResult!.classId]!,
-                                        subtitle: Recommendations()
-                                            .get(_scanResult!.classId),
-                                        icon: '🩺',
-                                        color: getColorForClassConfidence(
-                                          _scanResult!.classId,
-                                          _scanResult!.confidence,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                ElevatedButton.icon(
-                                  onPressed: _openSaveScanDialog,
-                                  icon: const Icon(Icons.save_alt),
-                                  label: const Text('Salvează rezultatul'),
-                                  style: ElevatedButton.styleFrom(
-                                    minimumSize:
-                                        const Size(double.infinity, 48),
-                                  ),
-                                ),
-                              ],
-                            )
-                          : Column(
+          SliverConstrainedCrossAxis(
+            maxExtent: 600,
+            sliver: SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error
+                        ? Center(
+                            child: Column(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                SvgPicture.asset(
-                                  'assets/images/info.svg',
-                                  height: 60,
-                                ),
-                                const SizedBox(height: 12),
-                                Card(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  color: Colors.blue.shade50,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16.0),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Checkbox(
-                                          value: _consentGiven,
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _consentGiven = value ?? false;
-                                            });
-                                          },
-                                        ),
-                                        const SizedBox(width: 8),
-                                        const Expanded(
-                                          child: Text(
-                                            'Confirm că am înțeles și sunt de acord cu faptul că această aplicație are un scop exclusiv informativ și educativ, fără a oferi un diagnostic medical validat clinic. '
-                                            'În cazul oricărei suspiciuni legate de sănătatea pielii, mă angajez să consult un medic specialist.',
-                                            style: TextStyle(
-                                                fontSize: 14, height: 1.4),
-                                            textAlign: TextAlign.justify,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                ElevatedButton.icon(
-                                  onPressed: _consentGiven ? _getResult : null,
-                                  icon: const Icon(Icons.analytics_outlined),
-                                  label: const Text('Obține rezultatul'),
-                                  style: ElevatedButton.styleFrom(
-                                    minimumSize:
-                                        const Size(double.infinity, 56),
-                                  ),
-                                ),
+                                const Text('Ceva nu a funcționat...'),
                                 const SizedBox(height: 12),
                                 OutlinedButton.icon(
-                                  onPressed: () => Navigator.pop(context),
+                                  onPressed: () => setState(() {
+                                    _error = false;
+                                  }),
                                   icon: const Icon(Icons.refresh),
-                                  label: const Text('Reîncarcă / Refă poză'),
+                                  label: const Text('Reîncearcă'),
                                   style: OutlinedButton.styleFrom(
                                     minimumSize:
                                         const Size(double.infinity, 56),
@@ -477,6 +373,99 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                 ),
                               ],
                             ),
+                          )
+                        : _showResult
+                            ? Column(
+                                children: [
+                                  Expanded(
+                                    child: ResultCard(
+                                      title: classes[_scanResult!.classId]!,
+                                      subtitle: Recommendations()
+                                          .get(_scanResult!.classId),
+                                      icon: '🩺',
+                                      color: getColorForClassConfidence(
+                                        _scanResult!.classId,
+                                        _scanResult!.confidence,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: _openSaveScanDialog,
+                                    icon: const Icon(Icons.save_alt),
+                                    label: const Text('Salvează rezultatul'),
+                                    style: ElevatedButton.styleFrom(
+                                      minimumSize:
+                                          const Size(double.infinity, 48),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  SvgPicture.asset(
+                                    'assets/images/info.svg',
+                                    height: 60,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Card(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    color: Colors.blue.shade50,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Checkbox(
+                                            value: _consentGiven,
+                                            onChanged: (value) {
+                                              setState(() {
+                                                _consentGiven = value ?? false;
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(width: 8),
+                                          const Expanded(
+                                            child: Text(
+                                              'Confirm că am înțeles și sunt de acord cu faptul că această aplicație are un scop exclusiv informativ și educativ, fără a oferi un diagnostic medical validat clinic. '
+                                              'În cazul oricărei suspiciuni legate de sănătatea pielii, mă angajez să consult un medic specialist.',
+                                              style: TextStyle(
+                                                  fontSize: 14, height: 1.4),
+                                              textAlign: TextAlign.justify,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ElevatedButton.icon(
+                                    onPressed:
+                                        _consentGiven ? _getResult : null,
+                                    icon: const Icon(Icons.analytics_outlined),
+                                    label: const Text('Obține rezultatul'),
+                                    style: ElevatedButton.styleFrom(
+                                      minimumSize:
+                                          const Size(double.infinity, 56),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  OutlinedButton.icon(
+                                    onPressed: () => Navigator.pop(context),
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text('Reîncarcă / Refă poză'),
+                                    style: OutlinedButton.styleFrom(
+                                      minimumSize:
+                                          const Size(double.infinity, 56),
+                                    ),
+                                  ),
+                                ],
+                              ),
+              ),
             ),
           ),
         ],

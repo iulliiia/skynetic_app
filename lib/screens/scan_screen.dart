@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skynetic_app/widgets/responsive_center.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -48,64 +49,66 @@ class ScanScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Analizează-ți pielea'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Descoperă puterea tehnologiei pentru sănătatea ta',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
+        child: ResponsiveCenter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Descoperă puterea tehnologiei pentru sănătatea ta',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Tehnologia a evoluat, iar acum o poți folosi pentru a avea grijă de pielea ta. '
-              'Cu ajutorul unui model de învățare automată creat special pentru analiza leziunilor cutanate, aplicația poate examina o simplă fotografie a pielii tale. ',
-              style: TextStyle(
-                fontSize: 15,
-                color: AppColors.textPrimary,
-                height: 1.4,
+              const SizedBox(height: 12),
+              const Text(
+                'Tehnologia a evoluat, iar acum o poți folosi pentru a avea grijă de pielea ta. '
+                'Cu ajutorul unui model de învățare automată creat special pentru analiza leziunilor cutanate, aplicația poate examina o simplă fotografie a pielii tale. ',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: AppColors.textPrimary,
+                  height: 1.4,
+                ),
               ),
-            ),
-            const Text(
-              'Alfă dacă este sau nu este cazul să consulți un medic dermatolog.',
-              style: TextStyle(
-                fontSize: 15,
-                color: AppColors.textPrimary,
-                height: 1.4,
+              const Text(
+                'Alfă dacă este sau nu este cazul să consulți un medic dermatolog.',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: AppColors.textPrimary,
+                  height: 1.4,
+                ),
               ),
-            ),
-            const Text(
-              '        Rapid, accesibil și orientat spre prevenție!',
-              style: TextStyle(
-                fontSize: 15,
-                color: AppColors.textPrimary,
-                height: 1.4,
-                fontWeight: FontWeight.bold,
+              const Text(
+                '        Rapid, accesibil și orientat spre prevenție!',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: AppColors.textPrimary,
+                  height: 1.4,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(height: 32),
-            _buildActionCard(
-              context,
-              icon: Icons.camera_alt_outlined,
-              title: 'Fotografiază',
-              description: 'Deschide camera pentru a face o poză leziunii',
-              onTap: () => _pickImage(context, ImageSource.camera),
-            ),
-            const SizedBox(height: 20),
-            _buildActionCard(
-              context,
-              icon: Icons.photo_library_outlined,
-              title: 'Încarcă din galerie',
-              description: 'Selectează o imagine existentă din telefon',
-              onTap: () => _pickImage(context, ImageSource.gallery),
-            ),
-          ],
+              const SizedBox(height: 32),
+              _buildActionCard(
+                context,
+                icon: Icons.camera_alt_outlined,
+                title: 'Fotografiază',
+                description: 'Deschide camera pentru a face o poză leziunii',
+                onTap: () => _pickImage(context, ImageSource.camera),
+              ),
+              const SizedBox(height: 20),
+              _buildActionCard(
+                context,
+                icon: Icons.photo_library_outlined,
+                title: 'Încarcă din galerie',
+                description: 'Selectează o imagine existentă din telefon',
+                onTap: () => _pickImage(context, ImageSource.gallery),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -127,8 +130,8 @@ class ScanScreen extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          height: 140,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 140),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 18),
             child: Row(

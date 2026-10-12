@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:skynetic_app/models/saved_scans.dart';
 import 'package:skynetic_app/screens/photo_detail_screen.dart';
 import 'package:intl/intl.dart';
+import 'package:skynetic_app/widgets/responsive_center.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -120,9 +121,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Filtrează scanările',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                const Expanded(
+                  child: Text(
+                    'Filtrează scanările',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 IconButton(
                   icon: Icon(
@@ -156,6 +159,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   labelText: 'Partea corpului',
                   border: OutlineInputBorder(),
                 ),
+                isExpanded: true,
                 initialValue: selectedBodySide,
                 items: ['Anterior', 'Posterior'].map((side) {
                   return DropdownMenuItem(value: side, child: Text(side));
@@ -175,6 +179,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   labelText: 'Lateralitate',
                   border: OutlineInputBorder(),
                 ),
+                isExpanded: true,
                 initialValue: selectedLateralSide,
                 items: ['Stânga', 'Dreapta', 'Centru'].map((side) {
                   return DropdownMenuItem(value: side, child: Text(side));
@@ -194,6 +199,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   labelText: 'Regiunea anatomică',
                   border: OutlineInputBorder(),
                 ),
+                isExpanded: true,
                 initialValue: selectedBodyPart,
                 items: _allScans
                     .map((scan) => scan.bodyPart)
@@ -261,6 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     for (final scan in _selectedScans) {
       await SavedScans.remove(scan);
     }
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
       content: Text('Scanările selectate au fost șterse cu succes.'),
     ));
@@ -288,12 +295,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 )
               ],
       ),
-      body: Column(
-        children: [
-          _buildFilterSection(),
-          Expanded(
-            child: _displayedScans.isEmpty
-                ? const Center(
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: ResponsiveCenter(child: _buildFilterSection()),
+          ),
+          _displayedScans.isEmpty
+              ? const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -305,25 +315,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                     ),
-                  )
-                : Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: GridView.builder(
-                      itemCount: _displayedScans.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 0.8,
-                      ),
-                      itemBuilder: (context, index) {
-                        final scan = _displayedScans[index];
-                        final isSelected = _selectedScans.contains(scan);
-                        final statusColor = _getColorForClassId(scan.classId);
+                  ),
+                )
+              : SliverPadding(
+                  padding: const EdgeInsets.all(16.0),
+                  sliver: SliverGrid.builder(
+                    itemCount: _displayedScans.length,
+                    // 2 columns on phones, more on tablets / landscape
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 220,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.8,
+                    ),
+                    itemBuilder: (context, index) {
+                      final scan = _displayedScans[index];
+                      final isSelected = _selectedScans.contains(scan);
+                      final statusColor = _getColorForClassId(scan.classId);
 
-                        return GestureDetector(
-                          onLongPress: () {
+                      return GestureDetector(
+                        onLongPress: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedScans.remove(scan);
+                            } else {
+                              _selectedScans.add(scan);
+                            }
+                          });
+                        },
+                        onTap: () {
+                          if (_selectedScans.isNotEmpty) {
                             setState(() {
                               if (isSelected) {
                                 _selectedScans.remove(scan);
@@ -331,115 +353,99 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 _selectedScans.add(scan);
                               }
                             });
-                          },
-                          onTap: () {
-                            if (_selectedScans.isNotEmpty) {
-                              setState(() {
-                                if (isSelected) {
-                                  _selectedScans.remove(scan);
-                                } else {
-                                  _selectedScans.add(scan);
-                                }
-                              });
-                            } else {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => PhotoDetailScreen(
-                                    scan: scan,
-                                  ),
+                          } else {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => PhotoDetailScreen(
+                                  scan: scan,
                                 ),
-                              );
-                            }
-                          },
-                          child: Card(
-                            elevation: 4,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(
-                                color: statusColor,
-                                width: 3,
                               ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: Stack(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(12),
-                                          topRight: Radius.circular(12),
-                                        ),
-                                        child: Image.file(
-                                          File(scan.imagePath),
-                                          fit: BoxFit.cover,
-                                          width: double.infinity,
-                                          height: double.infinity,
-                                        ),
-                                      ),
-                                      if (isSelected)
-                                        const Positioned(
-                                          top: 8,
-                                          left: 8,
-                                          child: Icon(
-                                            Icons.check_circle,
-                                            color: Colors.blue,
-                                            size: 24,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(8.0),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          scan.uniqueTag,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          scan.locationLabel,
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const Spacer(),
-                                        Text(
-                                          DateFormat('dd/MM/yyyy')
-                                              .format(scan.scanDate),
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            );
+                          }
+                        },
+                        child: Card(
+                          elevation: 4,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: statusColor,
+                              width: 3,
                             ),
                           ),
-                        );
-                      },
-                    ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Stack(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(12),
+                                        topRight: Radius.circular(12),
+                                      ),
+                                      child: Image.file(
+                                        File(scan.imagePath),
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      const Positioned(
+                                        top: 8,
+                                        left: 8,
+                                        child: Icon(
+                                          Icons.check_circle,
+                                          color: Colors.blue,
+                                          size: 24,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      scan.uniqueTag,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      scan.locationLabel,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      DateFormat('dd/MM/yyyy')
+                                          .format(scan.scanDate),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
-          ),
+                ),
         ],
       ),
     );

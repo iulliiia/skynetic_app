@@ -21,8 +21,8 @@ class LearnCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          height: 120, // 🔼 Increased height
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 120),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
