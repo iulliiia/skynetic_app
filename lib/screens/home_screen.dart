@@ -145,13 +145,13 @@ class _HomeContentState extends State<HomeContent> {
                     Icon(
                       Icons.history,
                       size: 48,
-                      color: AppColors.accent1.withOpacity(0.5),
+                      color: AppColors.accent1.withValues(alpha: 0.5),
                     ),
                     const SizedBox(height: 16),
                     Text(
                       'Nicio scanare recentă',
                       style: TextStyle(
-                        color: AppColors.textSecondary.withOpacity(0.7),
+                        color: AppColors.textSecondary.withValues(alpha: 0.7),
                       ),
                     ),
                   ],
@@ -198,7 +198,7 @@ class _HomeContentState extends State<HomeContent> {
                         child: Container(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
-                            color: AppColors.accent1.withOpacity(0.1),
+                            color: AppColors.accent1.withValues(alpha: 0.1),
                             border: Border.all(color: AppColors.accent1),
                           ),
                           child: const Center(

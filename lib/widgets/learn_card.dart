@@ -30,7 +30,7 @@ class LearnCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.secondary.withOpacity(0.3),
+                    color: AppColors.secondary.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(

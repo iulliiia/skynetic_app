@@ -139,7 +139,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                           labelText: 'Partea corpului *',
                           prefixIcon: Icon(Icons.accessibility_new),
                         ),
-                        value: selectedBodySide,
+                        initialValue: selectedBodySide,
                         items: bodySideOptions.map((side) {
                           return DropdownMenuItem(
                             value: side,
@@ -160,7 +160,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                           labelText: 'Lateralitate *',
                           prefixIcon: Icon(Icons.compare_arrows),
                         ),
-                        value: selectedLateralSide,
+                        initialValue: selectedLateralSide,
                         items: lateralSideOptions.map((side) {
                           return DropdownMenuItem(
                             value: side,
@@ -181,7 +181,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                           labelText: 'Regiunea anatomică *',
                           prefixIcon: Icon(Icons.person_outline),
                         ),
-                        value: selectedMainBodyPart,
+                        initialValue: selectedMainBodyPart,
                         isExpanded: true,
                         items: mainBodyParts.map((part) {
                           return DropdownMenuItem(
@@ -206,7 +206,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                             labelText: 'Detaliu regiune',
                             prefixIcon: Icon(Icons.segment),
                           ),
-                          value: selectedSubBodyPart,
+                          initialValue: selectedSubBodyPart,
                           isExpanded: true,
                           items: bodyPartsHierarchy[selectedMainBodyPart!]!
                               .map((subPart) {
@@ -390,7 +390,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                     children: [
                                       ResultCard(
                                         title:
-                                            "${classes[_scanResult!.classId]!}",
+                                            classes[_scanResult!.classId]!,
                                         subtitle: Recommendations()
                                             .get(_scanResult!.classId),
                                         icon: '🩺',
@@ -446,7 +446,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                           child: Text(
                                             'Confirm că am înțeles și sunt de acord cu faptul că această aplicație are un scop exclusiv informativ și educativ, fără a oferi un diagnostic medical validat clinic. '
                                             'În cazul oricărei suspiciuni legate de sănătatea pielii, mă angajez să consult un medic specialist.',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                                 fontSize: 14, height: 1.4),
                                             textAlign: TextAlign.justify,
                                           ),

@@ -6,10 +6,10 @@ class ScanFilterWidget extends StatefulWidget {
   final List<SavedScan> allScans;
 
   const ScanFilterWidget({
-    Key? key,
+    super.key,
     required this.onFilteredScans,
     required this.allScans,
-  }) : super(key: key);
+  });
 
   @override
   State<ScanFilterWidget> createState() => _ScanFilterWidgetState();
@@ -110,7 +110,7 @@ class _ScanFilterWidgetState extends State<ScanFilterWidget> {
                 labelText: 'Partea corpului',
                 border: OutlineInputBorder(),
               ),
-              value: selectedBodySide,
+              initialValue: selectedBodySide,
               items: ['Anterior (Față)', 'Posterior (Spate)'].map((side) {
                 return DropdownMenuItem(value: side, child: Text(side));
               }).toList(),
@@ -129,7 +129,7 @@ class _ScanFilterWidgetState extends State<ScanFilterWidget> {
                 labelText: 'Lateralitate',
                 border: OutlineInputBorder(),
               ),
-              value: selectedLateralSide,
+              initialValue: selectedLateralSide,
               items: ['Stânga', 'Dreapta', 'Centru'].map((side) {
                 return DropdownMenuItem(value: side, child: Text(side));
               }).toList(),

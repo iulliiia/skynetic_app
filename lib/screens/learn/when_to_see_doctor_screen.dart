@@ -89,7 +89,7 @@ class WhenToSeeDoctorScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.accent2.withOpacity(0.1),
+                  color: AppColors.accent2.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.accent2),
                 ),

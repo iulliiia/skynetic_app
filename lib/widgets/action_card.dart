@@ -28,7 +28,7 @@ class ActionCard extends StatelessWidget {
           color: AppColors.white,
           boxShadow: [
             BoxShadow(
-              color: AppColors.accent1.withOpacity(0.2),
+              color: AppColors.accent1.withValues(alpha: 0.2),
               blurRadius: 12,
               offset: const Offset(0, 6),
             ),
@@ -39,7 +39,7 @@ class ActionCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.accent1.withOpacity(0.2),
+                color: AppColors.accent1.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, size: 32, color: AppColors.primary),

@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:skynetic_app/models/saved_scans.dart';
 import 'package:skynetic_app/screens/photo_detail_screen.dart';
-import 'package:skynetic_app/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -15,7 +14,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   List<SavedScan> _displayedScans = [];
   List<SavedScan> _allScans = [];
-  Set<SavedScan> _selectedScans = {};
+  final Set<SavedScan> _selectedScans = {};
   bool _showFilters = false;
 
   // Filter variables
@@ -157,7 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   labelText: 'Partea corpului',
                   border: OutlineInputBorder(),
                 ),
-                value: selectedBodySide,
+                initialValue: selectedBodySide,
                 items: ['Anterior', 'Posterior'].map((side) {
                   return DropdownMenuItem(value: side, child: Text(side));
                 }).toList(),
@@ -176,7 +175,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   labelText: 'Lateralitate',
                   border: OutlineInputBorder(),
                 ),
-                value: selectedLateralSide,
+                initialValue: selectedLateralSide,
                 items: ['Stânga', 'Dreapta', 'Centru'].map((side) {
                   return DropdownMenuItem(value: side, child: Text(side));
                 }).toList(),
@@ -195,7 +194,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   labelText: 'Regiunea anatomică',
                   border: OutlineInputBorder(),
                 ),
-                value: selectedBodyPart,
+                initialValue: selectedBodyPart,
                 items: _allScans
                     .map((scan) => scan.bodyPart)
                     .toSet()

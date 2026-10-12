@@ -120,7 +120,7 @@ class ScanScreen extends StatelessWidget {
   }) {
     return Card(
       elevation: 6,
-      shadowColor: AppColors.primary.withOpacity(0.25),
+      shadowColor: AppColors.primary.withValues(alpha: 0.25),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -136,11 +136,11 @@ class ScanScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.secondary.withOpacity(0.25),
+                    color: AppColors.secondary.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withValues(alpha: 0.08),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
