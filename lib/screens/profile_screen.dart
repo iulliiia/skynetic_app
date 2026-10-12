@@ -1,9 +1,9 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:skynetic_app/models/saved_scans.dart';
 import 'package:skynetic_app/screens/photo_detail_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:skynetic_app/widgets/responsive_center.dart';
+import 'package:skynetic_app/widgets/scan_image.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,6 +17,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<SavedScan> _allScans = [];
   final Set<SavedScan> _selectedScans = {};
   bool _showFilters = false;
+  // bumped to reset the dropdowns when filters are cleared
+  int _filtersVersion = 0;
 
   // Filter variables
   String? selectedBodySide;
@@ -31,12 +33,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadScans();
   }
 
+  @override
+  void dispose() {
+    tagSearchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadScans() async {
     await SavedScans.load();
+    if (!mounted) return;
     setState(() {
-      _allScans = List.from(SavedScans.list);
-      _displayedScans = List.from(SavedScans.list);
+      // newest first
+      _allScans = List.from(SavedScans.list.reversed);
+      if (selectedBodyPart != null &&
+          !_allScans.any((scan) => scan.bodyPart == selectedBodyPart)) {
+        selectedBodyPart = null;
+        _filtersVersion++;
+      }
     });
+    _applyFilters();
   }
 
   void _applyFilters() {
@@ -94,6 +109,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       selectedDateRange = null;
       tagSearchController.clear();
       _displayedScans = _allScans;
+      _filtersVersion++;
     });
   }
 
@@ -155,6 +171,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               // Body side filter
               DropdownButtonFormField<String>(
+                key: ValueKey('side-$_filtersVersion'),
                 decoration: const InputDecoration(
                   labelText: 'Partea corpului',
                   border: OutlineInputBorder(),
@@ -162,7 +179,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 isExpanded: true,
                 initialValue: selectedBodySide,
                 items: ['Anterior', 'Posterior'].map((side) {
-                  return DropdownMenuItem(value: side, child: Text(side));
+                  return DropdownMenuItem(
+                    value: side,
+                    child: Text(side, overflow: TextOverflow.ellipsis));
                 }).toList(),
                 onChanged: (value) {
                   setState(() {
@@ -175,6 +194,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               // Lateral side filter
               DropdownButtonFormField<String>(
+                key: ValueKey('lateral-$_filtersVersion'),
                 decoration: const InputDecoration(
                   labelText: 'Lateralitate',
                   border: OutlineInputBorder(),
@@ -182,7 +202,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 isExpanded: true,
                 initialValue: selectedLateralSide,
                 items: ['Stânga', 'Dreapta', 'Centru'].map((side) {
-                  return DropdownMenuItem(value: side, child: Text(side));
+                  return DropdownMenuItem(
+                    value: side,
+                    child: Text(side, overflow: TextOverflow.ellipsis));
                 }).toList(),
                 onChanged: (value) {
                   setState(() {
@@ -195,6 +217,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               // Body part filter
               DropdownButtonFormField<String>(
+                key: ValueKey('part-$_filtersVersion'),
                 decoration: const InputDecoration(
                   labelText: 'Regiunea anatomică',
                   border: OutlineInputBorder(),
@@ -204,8 +227,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 items: _allScans
                     .map((scan) => scan.bodyPart)
                     .toSet()
-                    .map((part) =>
-                        DropdownMenuItem(value: part, child: Text(part)))
+                    .map((part) => DropdownMenuItem(
+                        value: part,
+                        child: Text(part, overflow: TextOverflow.ellipsis)))
                     .toList(),
                 onChanged: (value) {
                   setState(() {
@@ -218,6 +242,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               // Date range picker
               ListTile(
+                contentPadding: EdgeInsets.zero,
                 title: Text(selectedDateRange == null
                     ? 'Selectează perioada'
                     : 'Perioada: ${DateFormat('dd/MM/yyyy').format(selectedDateRange!.start)} - ${DateFormat('dd/MM/yyyy').format(selectedDateRange!.end)}'),
@@ -239,22 +264,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
 
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _clearFilters,
-                      child: const Text('Șterge filtrele'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _applyFilters,
-                      child: const Text('Aplică filtrele'),
-                    ),
-                  ),
-                ],
+              // filters apply as soon as they change
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _clearFilters,
+                  icon: const Icon(Icons.filter_alt_off_outlined),
+                  label: const Text('Șterge filtrele'),
+                ),
               ),
             ],
           ],
@@ -264,6 +281,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _deleteSelectedScans() async {
+    final count = _selectedScans.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Șterge scanările'),
+        content: Text(count == 1
+            ? 'Ești sigur că vrei să ștergi scanarea selectată?'
+            : 'Ești sigur că vrei să ștergi cele $count scanări selectate?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Anulează'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Șterge'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     for (final scan in _selectedScans) {
       await SavedScans.remove(scan);
     }
@@ -280,7 +320,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profilul tău'),
+        title: Text(_selectedScans.isEmpty
+            ? 'Arhiva ta'
+            : '${_selectedScans.length} selectate'),
+        leading: _selectedScans.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(_selectedScans.clear),
+              ),
         actions: _selectedScans.isNotEmpty
             ? [
                 IconButton(
@@ -309,9 +357,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Icon(Icons.folder_open, size: 64, color: Colors.grey),
                         SizedBox(height: 16),
-                        Text(
-                          'Nu ai salvat nicio scanare încă.',
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            'Nicio scanare de afișat.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
+                          ),
                         ),
                       ],
                     ),
@@ -322,12 +374,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   sliver: SliverGrid.builder(
                     itemCount: _displayedScans.length,
                     // 2 columns on phones, more on tablets / landscape
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                    // A fixed tile height that grows with the font size, so the
+                    // caption below the photo never overflows the tile.
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 220,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
-                      childAspectRatio: 0.8,
+                      mainAxisExtent: 140 +
+                          MediaQuery.textScalerOf(context).scale(1) * 76,
                     ),
                     itemBuilder: (context, index) {
                       final scan = _displayedScans[index];
@@ -354,16 +408,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               }
                             });
                           } else {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => PhotoDetailScreen(
-                                  scan: scan,
-                                ),
-                              ),
-                            );
+                            Navigator.of(context)
+                                .push(
+                                  MaterialPageRoute(
+                                    builder: (_) => PhotoDetailScreen(
+                                      scan: scan,
+                                    ),
+                                  ),
+                                )
+                                .then((_) => _loadScans());
                           }
                         },
                         child: Card(
+                          margin: EdgeInsets.zero,
+                          clipBehavior: Clip.antiAlias,
                           elevation: 4,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -378,17 +436,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Expanded(
                                 child: Stack(
                                   children: [
-                                    ClipRRect(
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(12),
-                                        topRight: Radius.circular(12),
-                                      ),
-                                      child: Image.file(
-                                        File(scan.imagePath),
-                                        fit: BoxFit.cover,
-                                        width: double.infinity,
-                                        height: double.infinity,
-                                      ),
+                                    Positioned.fill(
+                                      child: ScanImage(path: scan.imagePath),
                                     ),
                                     if (isSelected)
                                       const Positioned(
@@ -406,6 +455,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Padding(
                                 padding: const EdgeInsets.all(8.0),
                                 child: Column(
+                                  mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(

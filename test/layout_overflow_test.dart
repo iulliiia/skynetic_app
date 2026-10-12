@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:skynetic_app/api/api.dart';
+import 'package:skynetic_app/models/scan_result.dart';
 import 'package:skynetic_app/models/saved_scans.dart';
 import 'package:skynetic_app/screens/home_screen.dart';
 import 'package:skynetic_app/screens/learn/abcde_screen.dart';
@@ -42,6 +45,26 @@ const _sizes = {
   'iPad': (Size(1024, 1366), EdgeInsets.only(top: 24, bottom: 20)),
 };
 
+const _keyboard = FakeViewPadding(bottom: 300);
+
+ScanResultScreen _resultScreen(ImagePredictor predictor) =>
+    ScanResultScreen(imageFile: XFile('/nonexistent.jpg'), predictor: predictor);
+
+/// Accepts the disclaimer and asks for the analysis.
+Future<void> _requestResult(WidgetTester t, {bool settle = true}) async {
+  await t.ensureVisible(find.byType(Checkbox));
+  await t.tap(find.byType(Checkbox));
+  await t.pump();
+  final button = find.text('Obține rezultatul');
+  await t.ensureVisible(button);
+  await t.tap(button);
+  if (settle) {
+    await t.pumpAndSettle();
+  } else {
+    await t.pump(const Duration(milliseconds: 500));
+  }
+}
+
 final _screens =
     <String, (Widget Function(), Future<void> Function(WidgetTester)?)>{
   'Home': (() => const HomeScreen(), null),
@@ -54,6 +77,24 @@ final _screens =
       await t.pumpAndSettle();
     }
   ),
+  'Profile (filters open, keyboard)': (
+    () => const ProfileScreen(),
+    (t) async {
+      await t.tap(find.byIcon(Icons.expand_more));
+      await t.pumpAndSettle();
+      t.view.viewInsets = _keyboard;
+      await t.pumpAndSettle();
+    }
+  ),
+  'Home tabs': (
+    () => const HomeScreen(),
+    (t) async {
+      for (final icon in [Icons.camera_alt, Icons.book, Icons.home]) {
+        await t.tap(find.byIcon(icon).last);
+        await t.pumpAndSettle();
+      }
+    }
+  ),
   'ABCDE': (() => const ABCDEScreen(), null),
   'Prevention': (() => const PreventionScreen(), null),
   'Skin care': (() => const SkinCareScreen(), null),
@@ -63,6 +104,34 @@ final _screens =
   'Scan result': (
     () => ScanResultScreen(imageFile: XFile('/nonexistent.jpg')),
     null
+  ),
+  'Scan result (loading)': (
+    () => _resultScreen((_) => Completer<ScanResult>().future),
+    (t) => _requestResult(t, settle: false),
+  ),
+  'Scan result (error)': (
+    () => _resultScreen((_) async => throw const ApiException(
+        'Nu s-a putut realiza conexiunea cu serverul de analiză '
+        '(http://10.0.2.2:5001). Verifică dacă serverul este pornit.')),
+    _requestResult,
+  ),
+  'Scan result (high risk)': (
+    () => _resultScreen(
+        (_) async => const ScanResult(classId: 1, confidence: 0.93)),
+    _requestResult,
+  ),
+  'Save dialog (keyboard)': (
+    () => _resultScreen(
+        (_) async => const ScanResult(classId: 0, confidence: 0.61)),
+    (t) async {
+      await _requestResult(t);
+      final save = find.text('Salvează rezultatul');
+      await t.ensureVisible(save);
+      await t.tap(save);
+      await t.pumpAndSettle();
+      t.view.viewInsets = _keyboard;
+      await t.pumpAndSettle();
+    }
   ),
 };
 
@@ -104,10 +173,12 @@ void main() {
             ),
             home: screen.value.$1(),
           ));
-          await tester.pumpAndSettle();
-          await screen.value.$2?.call(tester);
-
-          FlutterError.onError = original;
+          try {
+            await tester.pumpAndSettle();
+            await screen.value.$2?.call(tester);
+          } finally {
+            FlutterError.onError = original;
+          }
           expect(overflows, isEmpty);
         });
       }

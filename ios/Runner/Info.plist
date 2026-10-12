@@ -45,6 +45,17 @@
 		<true/>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
+		<key>NSCameraUsageDescription</key>
+		<string>Camera este folosită pentru a fotografia zona de piele pe care vrei să o analizezi.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Accesul la galerie îți permite să alegi o fotografie a pielii pentru analiză.</string>
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>Locația este folosită pentru a-ți arăta clinicile dermatologice din apropiere.</string>
+		<key>NSAppTransportSecurity</key>
+		<dict>
+			<key>NSAllowsLocalNetworking</key>
+			<true/>
+		</dict>
 		<key>UIStatusBarHidden</key>
 		<false/>
 	</dict>

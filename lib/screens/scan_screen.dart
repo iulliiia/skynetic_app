@@ -10,24 +10,36 @@ class ScanScreen extends StatelessWidget {
   const ScanScreen({super.key});
 
   Future<void> _pickImage(BuildContext context, ImageSource source) async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final picker = ImagePicker();
+      // the model works on 180x180 images, so there is no need to upload
+      // full-resolution photos
+      final pickedFile = await picker.pickImage(
+        source: source,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 90,
+      );
+      if (pickedFile == null) return;
 
-    if (pickedFile != null) {
       // Crop the image
       final croppedFile = await ImageCropper().cropImage(
         sourcePath: pickedFile.path,
         aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
         uiSettings: [
           AndroidUiSettings(
-            toolbarTitle: 'Crop Image',
-            toolbarColor: Colors.deepOrange,
+            toolbarTitle: 'Decupează imaginea',
+            toolbarColor: AppColors.primary,
             toolbarWidgetColor: Colors.white,
-            initAspectRatio: CropAspectRatioPreset.original,
+            activeControlsWidgetColor: AppColors.accent2,
+            initAspectRatio: CropAspectRatioPreset.square,
             lockAspectRatio: false,
           ),
           IOSUiSettings(
-            title: 'Crop Image',
+            title: 'Decupează imaginea',
+            doneButtonTitle: 'Gata',
+            cancelButtonTitle: 'Anulează',
           ),
         ],
       );
@@ -40,6 +52,14 @@ class ScanScreen extends StatelessWidget {
           ),
         );
       }
+    } catch (err) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(source == ImageSource.camera
+              ? 'Nu s-a putut deschide camera. Verifică permisiunile aplicației.'
+              : 'Nu s-a putut deschide galeria. Verifică permisiunile aplicației.'),
+        ),
+      );
     }
   }
 
@@ -57,7 +77,6 @@ class ScanScreen extends StatelessWidget {
             children: [
               const Text(
                 'Descoperă puterea tehnologiei pentru sănătatea ta',
-                textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -74,16 +93,18 @@ class ScanScreen extends StatelessWidget {
                   height: 1.4,
                 ),
               ),
+              const SizedBox(height: 8),
               const Text(
-                'Alfă dacă este sau nu este cazul să consulți un medic dermatolog.',
+                'Află dacă este sau nu este cazul să consulți un medic dermatolog.',
                 style: TextStyle(
                   fontSize: 15,
                   color: AppColors.textPrimary,
                   height: 1.4,
                 ),
               ),
+              const SizedBox(height: 8),
               const Text(
-                '        Rapid, accesibil și orientat spre prevenție!',
+                'Rapid, accesibil și orientat spre prevenție!',
                 style: TextStyle(
                   fontSize: 15,
                   color: AppColors.textPrimary,

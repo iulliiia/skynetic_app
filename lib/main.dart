@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:skynetic_app/screens/home_screen.dart';
+import 'package:skynetic_app/screens/onboarding/onboarding_screen.dart';
 import 'package:skynetic_app/theme/app_theme.dart';
 import 'package:skynetic_app/utils/shared_prefs.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -17,10 +18,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'skynetic_app',
+      title: 'Skynetic',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: const HomeScreen(),
+      home: SharedPrefs.isOnboardingCompleted()
+          ? const HomeScreen()
+          : const OnboardingScreen(),
     );
   }
 }

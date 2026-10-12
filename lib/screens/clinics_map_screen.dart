@@ -12,6 +12,7 @@ class DermatologistMapScreen extends StatefulWidget {
 class _DermatologistMapScreenState extends State<DermatologistMapScreen> {
   LocationData? _currentLocation;
   final Location _locationService = Location();
+  GoogleMapController? _mapController;
 
   // Example clinics
   final List<Map<String, dynamic>> clinics = [
@@ -81,48 +82,54 @@ class _DermatologistMapScreenState extends State<DermatologistMapScreen> {
   }
 
   Future<void> _initLocation() async {
-    bool serviceEnabled;
-    PermissionStatus permissionGranted;
+    try {
+      bool serviceEnabled;
+      PermissionStatus permissionGranted;
 
-    serviceEnabled = await _locationService.serviceEnabled();
-    if (!serviceEnabled) {
-      serviceEnabled = await _locationService.requestService();
-      if (!serviceEnabled) return;
+      serviceEnabled = await _locationService.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await _locationService.requestService();
+        if (!serviceEnabled) return;
+      }
+
+      permissionGranted = await _locationService.hasPermission();
+      if (permissionGranted == PermissionStatus.denied) {
+        permissionGranted = await _locationService.requestPermission();
+      }
+      if (permissionGranted != PermissionStatus.granted &&
+          permissionGranted != PermissionStatus.grantedLimited) {
+        return;
+      }
+
+      final location = await _locationService.getLocation();
+      if (!mounted) return;
+      setState(() {
+        _currentLocation = location;
+      });
+      _mapController?.animateCamera(CameraUpdate.newLatLng(
+        LatLng(location.latitude, location.longitude),
+      ));
+    } catch (_) {
+      // Location is optional: the map still shows the clinics.
     }
-
-    permissionGranted = await _locationService.hasPermission();
-    if (permissionGranted == PermissionStatus.denied) {
-      permissionGranted = await _locationService.requestPermission();
-      if (permissionGranted != PermissionStatus.granted) return;
-    }
-
-    final location = await _locationService.getLocation();
-    setState(() {
-      _currentLocation = location;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final initialCameraPosition = _currentLocation != null
-        ? CameraPosition(
-            target:
-                LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
-            zoom: 14,
-          )
-        : const CameraPosition(
-            target: LatLng(44.439663, 26.096306), // Default to Bucharest center
-            zoom: 13,
-          );
+    const initialCameraPosition = CameraPosition(
+      target: LatLng(44.439663, 26.096306), // Default to Bucharest center
+      zoom: 13,
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Clinici Dermatologice Apropiate'),
+        title: const Text('Clinici dermatologice'),
       ),
       body: GoogleMap(
         initialCameraPosition: initialCameraPosition,
+        onMapCreated: (controller) => _mapController = controller,
         markers: _markers,
-        myLocationEnabled: true,
+        myLocationEnabled: _currentLocation != null,
         myLocationButtonEnabled: true,
       ),
     );

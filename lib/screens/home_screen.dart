@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:skynetic_app/widgets/responsive_center.dart';
 import 'package:skynetic_app/models/saved_scans.dart';
@@ -10,6 +8,7 @@ import 'package:skynetic_app/screens/scan_screen.dart';
 import 'package:skynetic_app/theme/app_theme.dart';
 import 'package:skynetic_app/widgets/action_card.dart';
 import 'package:skynetic_app/widgets/bottom_nav_bar.dart';
+import 'package:skynetic_app/widgets/scan_image.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,31 +20,42 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
-    const HomeContent(),
-    const ScanScreen(),
-    const ProfileScreen(),
-    const LearnScreen(),
-  ];
+  void _selectTab(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+  }
+
+  Widget _buildScreen() {
+    switch (_currentIndex) {
+      case 1:
+        return const ScanScreen();
+      case 2:
+        return const ProfileScreen();
+      case 3:
+        return const LearnScreen();
+      default:
+        return HomeContent(onSelectTab: _selectTab);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: _buildScreen(),
       bottomNavigationBar: CustomBottomNavBar(
         currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onTap: _selectTab,
       ),
     );
   }
 }
 
 class HomeContent extends StatefulWidget {
-  const HomeContent({super.key});
+  /// Switches the bottom navigation tab (1 = scan, 2 = archive, 3 = learn).
+  final ValueChanged<int>? onSelectTab;
+
+  const HomeContent({super.key, this.onSelectTab});
 
   @override
   State<HomeContent> createState() => _HomeContentState();
@@ -62,9 +72,19 @@ class _HomeContentState extends State<HomeContent> {
 
   Future<void> _loadRecentScans() async {
     await SavedScans.load();
+    if (!mounted) return;
     setState(() {
       recentScans = List.from(SavedScans.list.reversed.take(5));
     });
+  }
+
+  Future<void> _open(int tab, Widget screen) async {
+    if (widget.onSelectTab != null) {
+      widget.onSelectTab!(tab);
+      return;
+    }
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    _loadRecentScans();
   }
 
   @override
@@ -79,7 +99,6 @@ class _HomeContentState extends State<HomeContent> {
               children: [
                 const Text(
                   'Bine ai venit!',
-                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -101,11 +120,7 @@ class _HomeContentState extends State<HomeContent> {
                   subtitle:
                       'Trimite o imagine cu pielea ta pentru a o analiza automat.',
                   icon: Icons.camera_alt_outlined,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ScanScreen()),
-                    );
-                  },
+                  onTap: () => _open(1, const ScanScreen()),
                 ),
                 const SizedBox(height: 8),
                 ActionCard(
@@ -113,11 +128,7 @@ class _HomeContentState extends State<HomeContent> {
                   subtitle:
                       'Consultă rezultatele anterioare ale scanărilor tale.',
                   icon: Icons.history,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                    );
-                  },
+                  onTap: () => _open(2, const ProfileScreen()),
                 ),
                 const SizedBox(height: 8),
                 ActionCard(
@@ -125,11 +136,7 @@ class _HomeContentState extends State<HomeContent> {
                   subtitle:
                       'Care sunt tipurile de cancer de piele. Simptome și prevenție.',
                   icon: Icons.book_outlined,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const LearnScreen()),
-                    );
-                  },
+                  onTap: () => _open(3, const LearnScreen()),
                 ),
                 const SizedBox(height: 24),
                 const Text(
@@ -142,7 +149,8 @@ class _HomeContentState extends State<HomeContent> {
                 ),
                 const SizedBox(height: 16),
                 if (recentScans.isEmpty)
-                  Column(
+                  Center(
+                    child: Column(
                     children: [
                       Icon(
                         Icons.history,
@@ -157,6 +165,7 @@ class _HomeContentState extends State<HomeContent> {
                         ),
                       ),
                     ],
+                  ),
                   )
                 else
                   GridView.builder(
@@ -173,31 +182,24 @@ class _HomeContentState extends State<HomeContent> {
                       if (index < recentScans.length) {
                         final scan = recentScans[index];
                         return GestureDetector(
-                          onTap: () {
-                            Navigator.of(context).push(
+                          onTap: () async {
+                            await Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => PhotoDetailScreen(
                                   scan: scan,
                                 ),
                               ),
                             );
+                            _loadRecentScans();
                           },
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File(scan.imagePath),
-                              fit: BoxFit.cover,
-                            ),
+                            child: ScanImage(path: scan.imagePath),
                           ),
                         );
                       } else {
                         return GestureDetector(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                  builder: (_) => const ProfileScreen()),
-                            );
-                          },
+                          onTap: () => _open(2, const ProfileScreen()),
                           child: Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(8),

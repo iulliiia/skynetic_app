@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:skynetic_app/widgets/responsive_center.dart';
+import 'package:skynetic_app/widgets/scan_image.dart';
 import 'package:skynetic_app/models/recommendation.dart';
 import 'package:skynetic_app/models/scan_result.dart';
 import 'package:skynetic_app/models/saved_scans.dart';
@@ -68,24 +68,52 @@ class PhotoDetailScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _delete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Șterge scanarea'),
+        content: const Text('Ești sigur că vrei să ștergi această scanare?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Anulează'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Șterge'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    await SavedScans.load();
+    final stored = SavedScans.list.where((s) =>
+        s.uniqueTag == scan.uniqueTag && s.scanDate == scan.scanDate);
+    if (stored.isNotEmpty) await SavedScans.remove(stored.first);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Scanarea a fost ștearsă.')),
+    );
+    navigator.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final statusColor = _getStatusColor();
+    final isClear = scan.classId == 2;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(scan.uniqueTag),
+        title: Text(scan.uniqueTag, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: () {
-              // Implement sharing functionality
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content:
-                        Text('Funcționalitate de partajare în dezvoltare')),
-              );
-            },
+            icon: const Icon(Icons.delete_outline),
+            tooltip: 'Șterge scanarea',
+            onPressed: () => _delete(context),
           ),
         ],
       ),
@@ -103,15 +131,11 @@ class PhotoDetailScreen extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(13),
-                  child: Stack(
-                    children: [
-                      Image.file(
-                        File(scan.imagePath),
-                        height: 300,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    ],
+                  child: ScanImage(
+                    path: scan.imagePath,
+                    height: (MediaQuery.sizeOf(context).height * 0.4)
+                        .clamp(160.0, 300.0),
+                    width: double.infinity,
                   ),
                 ),
               ),
@@ -202,7 +226,9 @@ class PhotoDetailScreen extends StatelessWidget {
                     Text(
                       isDangerous
                           ? 'Această leziune poate fi periculoasă. Îți recomandăm să consulți un medic dermatolog cât mai curând.'
-                          : 'Această leziune nu pare a fi periculoasă. Totuși, monitorizarea periodică este importantă.',
+                          : isClear
+                              ? 'Nu a fost identificată nicio leziune. Continuă să îți verifici pielea periodic.'
+                              : 'Această leziune nu pare a fi periculoasă. Totuși, monitorizarea periodică este importantă.',
                       style: TextStyle(
                         color: statusColor,
                         fontWeight: FontWeight.w600,
