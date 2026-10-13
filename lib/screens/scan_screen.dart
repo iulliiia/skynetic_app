@@ -1,65 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:skynetic_app/widgets/responsive_center.dart';
-import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'package:skynetic_app/screens/scan_result_screen.dart';
+import 'package:go_router/go_router.dart';
+import 'package:skynetic_app/core/router/app_router.dart';
+import 'package:skynetic_app/features/scans/image_picking.dart';
 import 'package:skynetic_app/theme/app_theme.dart';
 
 class ScanScreen extends StatelessWidget {
   const ScanScreen({super.key});
 
   Future<void> _pickImage(BuildContext context, ImageSource source) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final picker = ImagePicker();
-      // the model works on 180x180 images, so there is no need to upload
-      // full-resolution photos
-      final pickedFile = await picker.pickImage(
-        source: source,
-        maxWidth: 1600,
-        maxHeight: 1600,
-        imageQuality: 90,
-      );
-      if (pickedFile == null) return;
-
-      // Crop the image
-      final croppedFile = await ImageCropper().cropImage(
-        sourcePath: pickedFile.path,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Decupează imaginea',
-            toolbarColor: AppColors.primary,
-            toolbarWidgetColor: Colors.white,
-            activeControlsWidgetColor: AppColors.accent2,
-            initAspectRatio: CropAspectRatioPreset.square,
-            lockAspectRatio: false,
-          ),
-          IOSUiSettings(
-            title: 'Decupează imaginea',
-            doneButtonTitle: 'Gata',
-            cancelButtonTitle: 'Anulează',
-          ),
-        ],
-      );
-
-      if (croppedFile != null && context.mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                ScanResultScreen(imageFile: XFile(croppedFile.path)),
-          ),
-        );
-      }
-    } catch (err) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(source == ImageSource.camera
-              ? 'Nu s-a putut deschide camera. Verifică permisiunile aplicației.'
-              : 'Nu s-a putut deschide galeria. Verifică permisiunile aplicației.'),
-        ),
-      );
+    final file = await pickAndCropImage(context, source);
+    if (file != null && context.mounted) {
+      context.push('/scan/result', extra: ScanResultArgs(file));
     }
   }
 

@@ -1,19 +1,5 @@
-class ScanResult {
-  final int classId;
-  final double confidence;
+import 'package:skynetic_app/features/lesions/prediction_models.dart';
 
-  const ScanResult({required this.classId, required this.confidence});
-
-  factory ScanResult.fromJson(Map<String, dynamic> json) {
-    return ScanResult(
-      classId: json['predicted_class_id'] as int,
-      confidence: (json['confidence'] as num).toDouble(),
-    );
-  }
-}
-
-final classes = <int, String>{
-  0: 'Grad de risc scăzut',
-  1: 'Grad de risc crescut',
-  2: 'Piele curată (nicio leziune detectată)',
-};
+/// Romanian labels by class id, including the inconclusive pseudo-class.
+/// Kept for the locally stored (guest) scans and the photo detail screen.
+final classes = PredictionClasses.labelsRo;

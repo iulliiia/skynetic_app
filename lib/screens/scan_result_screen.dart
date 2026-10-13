@@ -1,67 +1,150 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:skynetic_app/api/api.dart';
+import 'package:skynetic_app/core/api/api_error.dart';
+import 'package:skynetic_app/core/auth/auth_controller.dart';
+import 'package:skynetic_app/core/providers.dart';
+import 'package:skynetic_app/features/lesions/lesion_models.dart';
+import 'package:skynetic_app/features/lesions/lesion_picker.dart';
+import 'package:skynetic_app/features/lesions/lesion_providers.dart';
+import 'package:skynetic_app/features/lesions/prediction_models.dart';
 import 'package:skynetic_app/models/recommendation.dart';
 import 'package:skynetic_app/models/saved_scans.dart';
-import 'package:skynetic_app/models/scan_result.dart';
+import 'package:skynetic_app/theme/app_theme.dart';
 import 'package:skynetic_app/widgets/responsive_center.dart';
 import 'package:skynetic_app/widgets/result_card.dart';
 import 'package:skynetic_app/widgets/scan_image.dart';
 
-typedef ImagePredictor = Future<ScanResult> Function(XFile image);
-
-class ScanResultScreen extends StatefulWidget {
+/// Preview → consent → upload → AI analysis → result.
+///
+/// The photo is stored on the platform first (a patient picks the lesion it
+/// belongs to; a guest gets a temporary scan with a claim token) and the
+/// analysis runs server-side on the stored scan, so every result is tied to
+/// a scan record and a model version.
+class ScanResultScreen extends ConsumerStatefulWidget {
   final XFile imageFile;
 
-  /// Sends the image to the model. Defaults to the backend API; tests can
-  /// pass a fake.
-  final ImagePredictor? predictor;
+  /// Preselected lesion (when started from a lesion's detail screen).
+  final String? lesionId;
 
-  const ScanResultScreen({super.key, required this.imageFile, this.predictor});
+  const ScanResultScreen({super.key, required this.imageFile, this.lesionId});
 
   @override
-  State<ScanResultScreen> createState() => _ScanResultScreenState();
+  ConsumerState<ScanResultScreen> createState() => _ScanResultScreenState();
 }
 
-class _ScanResultScreenState extends State<ScanResultScreen> {
-  bool _loading = false;
-  ScanResult? _scanResult;
-  String? _errorMessage;
+enum _Stage { consent, uploading, analyzing, done, error }
+
+class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
+  _Stage _stage = _Stage.consent;
   bool _consentGiven = false;
+  String? _errorMessage;
 
-  Future<void> _getResult() async {
-    setState(() {
-      _loading = true;
-      _errorMessage = null;
-    });
+  String? _lesionId; // patient
+  Scan? _scan; // patient upload
+  GuestScan? _guest; // guest upload
+  Prediction? _prediction;
 
+  bool get _isPatient => ref.read(authControllerProvider).isPatient;
+  bool get _uploaded => _scan != null || _guest != null;
+  ScanQuality? get _quality => _scan?.quality ?? _guest?.quality;
+
+  Future<void> _start() async {
+    final repo = ref.read(lesionRepositoryProvider);
     try {
-      final predictor = widget.predictor ?? Api().predictImage;
-      final result = await predictor(widget.imageFile);
-      if (!mounted) return;
-      setState(() {
-        _scanResult = result;
-      });
-    } catch (err) {
-      log(err.toString());
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = err is ApiException
-            ? err.message
-            : 'Ceva nu a funcționat. Încearcă din nou.';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
+      if (!_uploaded) {
+        if (_isPatient) {
+          final lesionId = widget.lesionId ?? _lesionId ?? (await showLesionPicker(context))?.id;
+          if (lesionId == null || !mounted) return;
+          _lesionId = lesionId;
+          setState(() => _stage = _Stage.uploading);
+          final scan = await repo.uploadScan(lesionId, widget.imageFile);
+          if (!mounted) return;
+          invalidateLesionData(ref);
+          if (!scan.quality.acceptable) {
+            final keep = await _confirmKeepPoorQuality(scan.quality) ?? true;
+            if (!mounted) return;
+            if (!keep) {
+              try {
+                await repo.deleteScan(scan.id);
+                invalidateLesionData(ref);
+              } catch (_) {}
+              if (mounted) context.pop(); // retake
+              return;
+            }
+          }
+          _scan = scan;
+        } else {
+          setState(() => _stage = _Stage.uploading);
+          _guest = await repo.uploadGuestScan(widget.imageFile);
+        }
       }
+      if (!mounted) return;
+      setState(() => _stage = _Stage.analyzing);
+      final prediction = _scan != null
+          ? await repo.analyzeScan(_scan!.id)
+          : await repo.analyzeGuestScan(_guest!.scanId, _guest!.claimToken);
+      if (!mounted) return;
+      invalidateLesionData(ref);
+      setState(() {
+        _prediction = prediction;
+        _stage = _Stage.done;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.message;
+        _stage = _Stage.error;
+      });
+    } catch (e) {
+      log(e.toString());
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Ceva nu a funcționat. Încearcă din nou.';
+        _stage = _Stage.error;
+      });
     }
   }
 
-  void _openSaveScanDialog() {
+  Future<bool?> _confirmKeepPoorQuality(ScanQuality q) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Calitatea imaginii'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final w in q.warningMessages)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(w)),
+                ]),
+              ),
+            const SizedBox(height: 8),
+            const Text('O fotografie clară, făcută la lumină naturală, ajută atât analiza automată cât și medicul.',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Refă poza')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Analizează oricum')),
+        ],
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------ guest save
+
+  /// Keeps the result on the device, linked to the server-side guest scan so
+  /// it can be attached to an account later.
+  void _openGuestSaveDialog() {
     final TextEditingController tagController = TextEditingController();
     final TextEditingController notesController = TextEditingController();
 
@@ -86,27 +169,12 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
 
     final List<String> mainBodyParts = [
       ...bodyPartsHierarchy.keys,
-      'Gât',
-      'Piept',
-      'Axilă',
-      'Umăr',
-      'Coapsă',
-      'Gambă',
-      'Cot',
-      'Antebraț',
-      'Încheietura mâinii',
-      'Șold',
-      'Genunchi',
-      'Gleznă',
-      'Zona inghinală',
-      'Zona genitală',
-      'Zona perianală',
+      'Gât', 'Piept', 'Axilă', 'Umăr', 'Coapsă', 'Gambă', 'Cot', 'Antebraț', 'Încheietura mâinii',
+      'Șold', 'Genunchi', 'Gleznă', 'Zona inghinală', 'Zona genitală', 'Zona perianală',
     ];
 
     void showError(BuildContext context, String message) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
 
     showDialog(
@@ -115,79 +183,60 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             Future<void> save() async {
-              // Validări
-              if (tagController.text.trim().isEmpty) {
-                return showError(context, 'Eticheta unică este obligatorie');
-              }
-              if (selectedBodySide == null) {
-                return showError(context, 'Selectează partea corpului');
-              }
-              if (selectedLateralSide == null) {
-                return showError(context, 'Selectează lateralitatea');
-              }
-              if (selectedMainBodyPart == null) {
-                return showError(context, 'Selectează regiunea anatomică');
-              }
+              if (tagController.text.trim().isEmpty) return showError(context, 'Eticheta unică este obligatorie');
+              if (selectedBodySide == null) return showError(context, 'Selectează partea corpului');
+              if (selectedLateralSide == null) return showError(context, 'Selectează lateralitatea');
+              if (selectedMainBodyPart == null) return showError(context, 'Selectează regiunea anatomică');
 
               final String fullBodyPart = selectedSubBodyPart != null
                   ? '$selectedMainBodyPart - $selectedSubBodyPart'
                   : selectedMainBodyPart!;
-              final locationLabel =
-                  '$selectedBodySide - $selectedLateralSide - $fullBodyPart';
+              final locationLabel = '$selectedBodySide - $selectedLateralSide - $fullBodyPart';
 
               final navigator = Navigator.of(context);
               final messenger = ScaffoldMessenger.of(context);
               setDialogState(() => saving = true);
-
               try {
-                final imagePath =
-                    await SavedScans.persistImage(widget.imageFile.path);
+                final imagePath = await SavedScans.persistImage(widget.imageFile.path);
                 await SavedScans.save(SavedScan(
                   imagePath: imagePath,
-                  classId: _scanResult!.classId,
+                  classId: _prediction!.displayClassId,
                   locationLabel: locationLabel,
                   uniqueTag: tagController.text.trim(),
                   bodySide: selectedBodySide!,
                   lateralSide: selectedLateralSide!,
                   bodyPart: selectedMainBodyPart!,
                   subBodyPart: selectedSubBodyPart,
-                  notes: notesController.text.trim().isEmpty
-                      ? null
-                      : notesController.text.trim(),
+                  notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
                   scanDate: DateTime.now(),
+                  remoteScanId: _guest?.scanId,
+                  claimToken: _guest?.claimToken,
+                  claimExpiresAt: _guest?.expiresAt,
                 ));
               } catch (err) {
                 log(err.toString());
                 setDialogState(() => saving = false);
-                messenger.showSnackBar(const SnackBar(
-                    content: Text('Scanarea nu a putut fi salvată.')));
+                messenger.showSnackBar(const SnackBar(content: Text('Scanarea nu a putut fi salvată.')));
                 return;
               }
-
               messenger.showSnackBar(const SnackBar(
-                  content: Text('Scanarea a fost salvată în arhivă.')));
+                  content: Text('Scanarea a fost salvată. O poți adăuga la un cont în următoarele 24 de ore.')));
               navigator.pop(); // Închide dialog
               if (mounted) navigator.pop(); // Închide ecran
             }
 
             return AlertDialog(
               scrollable: true,
-              insetPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              title: const Text(
-                'Salvează scanarea',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Salvează scanarea', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               content: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 500),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Etichetă
                     TextFormField(
                       controller: tagController,
                       decoration: const InputDecoration(
@@ -197,105 +246,52 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // Partea corpului
                     DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(
-                        labelText: 'Partea corpului *',
-                        prefixIcon: Icon(Icons.accessibility_new),
-                      ),
+                      decoration: const InputDecoration(labelText: 'Partea corpului *', prefixIcon: Icon(Icons.accessibility_new)),
                       initialValue: selectedBodySide,
                       isExpanded: true,
-                      items: bodySideOptions.map((side) {
-                        return DropdownMenuItem(
-                          value: side,
-                          child: Text(side, overflow: TextOverflow.ellipsis),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setDialogState(() {
-                          selectedBodySide = value;
-                        });
-                      },
+                      items: bodySideOptions
+                          .map((side) => DropdownMenuItem(value: side, child: Text(side, overflow: TextOverflow.ellipsis)))
+                          .toList(),
+                      onChanged: (value) => setDialogState(() => selectedBodySide = value),
                     ),
                     const SizedBox(height: 16),
-
-                    // Lateralitate
                     DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(
-                        labelText: 'Lateralitate *',
-                        prefixIcon: Icon(Icons.compare_arrows),
-                      ),
+                      decoration: const InputDecoration(labelText: 'Lateralitate *', prefixIcon: Icon(Icons.compare_arrows)),
                       initialValue: selectedLateralSide,
                       isExpanded: true,
-                      items: lateralSideOptions.map((side) {
-                        return DropdownMenuItem(
-                          value: side,
-                          child: Text(side, overflow: TextOverflow.ellipsis),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setDialogState(() {
-                          selectedLateralSide = value;
-                        });
-                      },
+                      items: lateralSideOptions
+                          .map((side) => DropdownMenuItem(value: side, child: Text(side, overflow: TextOverflow.ellipsis)))
+                          .toList(),
+                      onChanged: (value) => setDialogState(() => selectedLateralSide = value),
                     ),
                     const SizedBox(height: 16),
-
-                    // Regiune principală
                     DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(
-                        labelText: 'Regiunea anatomică *',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
+                      decoration: const InputDecoration(labelText: 'Regiunea anatomică *', prefixIcon: Icon(Icons.person_outline)),
                       initialValue: selectedMainBodyPart,
                       isExpanded: true,
-                      items: mainBodyParts.map((part) {
-                        return DropdownMenuItem(
-                          value: part,
-                          child: Text(part, overflow: TextOverflow.ellipsis),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setDialogState(() {
-                          selectedMainBodyPart = value;
-                          selectedSubBodyPart = null;
-                        });
-                      },
+                      items: mainBodyParts
+                          .map((part) => DropdownMenuItem(value: part, child: Text(part, overflow: TextOverflow.ellipsis)))
+                          .toList(),
+                      onChanged: (value) => setDialogState(() {
+                        selectedMainBodyPart = value;
+                        selectedSubBodyPart = null;
+                      }),
                     ),
-
-                    // Regiune secundară (dacă e cazul)
-                    if (selectedMainBodyPart != null &&
-                        bodyPartsHierarchy
-                            .containsKey(selectedMainBodyPart!)) ...[
+                    if (selectedMainBodyPart != null && bodyPartsHierarchy.containsKey(selectedMainBodyPart!)) ...[
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
-                        // a new key resets the field when the region changes
                         key: ValueKey(selectedMainBodyPart),
-                        decoration: const InputDecoration(
-                          labelText: 'Detaliu regiune',
-                          prefixIcon: Icon(Icons.segment),
-                        ),
+                        decoration: const InputDecoration(labelText: 'Detaliu regiune', prefixIcon: Icon(Icons.segment)),
                         initialValue: selectedSubBodyPart,
                         isExpanded: true,
                         items: bodyPartsHierarchy[selectedMainBodyPart!]!
-                            .map((subPart) {
-                          return DropdownMenuItem(
-                            value: subPart,
-                            child:
-                                Text(subPart, overflow: TextOverflow.ellipsis),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            selectedSubBodyPart = value;
-                          });
-                        },
+                            .map((sub) => DropdownMenuItem(value: sub, child: Text(sub, overflow: TextOverflow.ellipsis)))
+                            .toList(),
+                        onChanged: (value) => setDialogState(() => selectedSubBodyPart = value),
                       ),
                     ],
                     const SizedBox(height: 16),
-
-                    // Note
                     TextFormField(
                       controller: notesController,
                       decoration: const InputDecoration(
@@ -307,40 +303,25 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                       style: const TextStyle(fontSize: 14),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      '* Câmpuri obligatorii',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
+                    const Text('* Câmpuri obligatorii',
+                        style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
                     const SizedBox(height: 16),
-                    // The buttons scroll with the form (instead of being
-                    // dialog actions) so they stay reachable when the
-                    // keyboard leaves little room, e.g. in landscape.
+                    // Buttons scroll with the form so they stay reachable with
+                    // the keyboard open on small/landscape screens.
                     Wrap(
                       alignment: WrapAlignment.end,
                       spacing: 8,
                       runSpacing: 8,
                       children: [
                         TextButton(
-                          onPressed:
-                              saving ? null : () => Navigator.of(context).pop(),
+                          onPressed: saving ? null : () => Navigator.of(context).pop(),
                           child: const Text('Anulează'),
                         ),
                         ElevatedButton(
                           onPressed: saving ? null : save,
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                          ),
+                          style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20)),
                           child: saving
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                               : const Text('Salvează'),
                         ),
                       ],
@@ -356,111 +337,151 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     );
   }
 
-  Color getColorForClassConfidence(int classId, double confidence) {
-    final clampedConfidence = confidence.clamp(0.0, 1.0);
-    switch (classId) {
+  // ------------------------------------------------------------------- UI
+
+  Widget _buildBody(AuthState auth) {
+    switch (_stage) {
+      case _Stage.uploading:
+      case _Stage.analyzing:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 32),
+          child: Column(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(_stage == _Stage.uploading ? 'Se încarcă imaginea...' : 'Se analizează imaginea...',
+                  textAlign: TextAlign.center),
+            ],
+          ),
+        );
+      case _Stage.error:
+        return _buildError();
+      case _Stage.done:
+        return _buildResult();
+      case _Stage.consent:
+        return _buildConsent(auth);
+    }
+  }
+
+  Widget _buildError() {
+    return Column(
+      children: [
+        const Icon(Icons.cloud_off, size: 48, color: Colors.redAccent),
+        const SizedBox(height: 12),
+        Text(_errorMessage ?? '', textAlign: TextAlign.center),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: _start,
+          icon: const Icon(Icons.refresh),
+          label: Text(_uploaded ? 'Reîncearcă analiza' : 'Reîncearcă'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
+        ),
+        const SizedBox(height: 12),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Alege altă imagine')),
+      ],
+    );
+  }
+
+  Widget _buildResult() {
+    final p = _prediction!;
+    final classId = p.displayClassId;
+    final color = _colorFor(p);
+    final auth = ref.watch(authControllerProvider);
+    final quality = _quality;
+
+    return Column(
+      children: [
+        ResultCard(
+          title: PredictionClasses.labelsRo[classId] ?? 'Rezultat necunoscut',
+          subtitle: Recommendations().get(classId),
+          icon: p.isInconclusive ? '🤔' : '🩺',
+          color: color,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          [
+            if (p.topScore != null) 'scor model ${(p.topScore! * 100).toStringAsFixed(0)}%',
+            'model ${p.modelName}/${p.modelVersion}',
+            'rezultat orientativ, nu un diagnostic',
+          ].join(' · '),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.grey, fontSize: 12),
+        ),
+        if (quality != null && !quality.acceptable) ...[
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            alignment: WrapAlignment.center,
+            children: [
+              for (final w in quality.warningMessages)
+                Chip(
+                  avatar: const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange),
+                  label: Text(w, style: const TextStyle(fontSize: 12)),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 16),
+        if (auth.isPatient)
+          ElevatedButton.icon(
+            onPressed: () {
+              if (widget.lesionId != null) {
+                context.pop();
+              } else {
+                context.go('/');
+                context.push('/lesions/$_lesionId');
+              }
+            },
+            icon: const Icon(Icons.folder_open),
+            label: const Text('Vezi leziunea'),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+          )
+        else
+          ElevatedButton.icon(
+            onPressed: _openGuestSaveDialog,
+            icon: const Icon(Icons.save_alt),
+            label: const Text('Salvează rezultatul'),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+          ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.camera_alt_outlined),
+          label: const Text('Scanează altă imagine'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+        ),
+        if (!auth.isAuthenticated) ...[
+          const SizedBox(height: 20),
+          _AccountNudge(onTap: () => context.push('/register')),
+        ],
+      ],
+    );
+  }
+
+  Color _colorFor(Prediction p) {
+    if (p.isInconclusive) return Colors.blueGrey.shade300;
+    final confidence = (p.topScore ?? 0).clamp(0.0, 1.0);
+    switch (p.predictedClass) {
       case 0:
-        return Color.lerp(Colors.yellow, const Color.fromARGB(211, 0, 176, 18),
-            clampedConfidence)!;
+        return Color.lerp(Colors.yellow, const Color.fromARGB(211, 0, 176, 18), confidence)!;
       case 1:
-        return Color.lerp(Colors.orange, const Color.fromARGB(255, 198, 36, 36),
-            clampedConfidence)!;
+        return Color.lerp(Colors.orange, const Color.fromARGB(255, 198, 36, 36), confidence)!;
       case 2:
-        return Color.lerp(Colors.grey.shade300,
-            const Color.fromARGB(255, 58, 189, 176), clampedConfidence)!;
+        return Color.lerp(Colors.grey.shade300, const Color.fromARGB(255, 58, 189, 176), confidence)!;
       default:
         return Colors.grey;
     }
   }
 
-  Widget _buildBody() {
-    if (_loading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 32),
-        child: Column(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Se analizează imaginea...', textAlign: TextAlign.center),
-          ],
-        ),
-      );
-    }
-
-    if (_errorMessage != null) {
-      return Column(
-        children: [
-          const Icon(Icons.cloud_off, size: 48, color: Colors.redAccent),
-          const SizedBox(height: 12),
-          Text(_errorMessage!, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: _getResult,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Reîncearcă'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 56),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Alege altă imagine'),
-          ),
-        ],
-      );
-    }
-
-    if (_scanResult != null) {
-      return Column(
-        children: [
-          ResultCard(
-            title: classes[_scanResult!.classId] ?? 'Rezultat necunoscut',
-            subtitle: Recommendations().get(_scanResult!.classId),
-            icon: '🩺',
-            color: getColorForClassConfidence(
-              _scanResult!.classId,
-              _scanResult!.confidence,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Încredere model: ${(_scanResult!.confidence * 100).toStringAsFixed(0)}%',
-            style: const TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _openSaveScanDialog,
-            icon: const Icon(Icons.save_alt),
-            label: const Text('Salvează rezultatul'),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-            ),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.camera_alt_outlined),
-            label: const Text('Scanează altă imagine'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-            ),
-          ),
-        ],
-      );
-    }
-
+  Widget _buildConsent(AuthState auth) {
     return Column(
       children: [
-        SvgPicture.asset(
-          'assets/images/info.svg',
-          height: 60,
-        ),
+        SvgPicture.asset('assets/images/info.svg', height: 60),
         const SizedBox(height: 12),
         Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           color: Colors.blue.shade50,
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
@@ -472,11 +493,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                 children: [
                   Checkbox(
                     value: _consentGiven,
-                    onChanged: (value) {
-                      setState(() {
-                        _consentGiven = value ?? false;
-                      });
-                    },
+                    onChanged: (value) => setState(() => _consentGiven = value ?? false),
                   ),
                   const SizedBox(width: 8),
                   const Expanded(
@@ -493,21 +510,19 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         ),
         const SizedBox(height: 12),
         ElevatedButton.icon(
-          onPressed: _consentGiven ? _getResult : null,
+          // Wait for the session to be restored so a patient is never
+          // treated as a guest.
+          onPressed: _consentGiven && !auth.isLoading ? _start : null,
           icon: const Icon(Icons.analytics_outlined),
           label: const Text('Obține rezultatul'),
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 56),
-          ),
+          style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.refresh),
           label: const Text('Reîncarcă / Refă poză'),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 56),
-          ),
+          style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
         ),
       ],
     );
@@ -516,6 +531,8 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.sizeOf(context).height;
+    // Watching here keeps the session provider alive from the first frame.
+    final auth = ref.watch(authControllerProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Previzualizare scanare')),
@@ -536,17 +553,49 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                   padding: const EdgeInsets.all(16.0),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
-                    child: KeyedSubtree(
-                      key: ValueKey(
-                          '$_loading-$_errorMessage-${_scanResult != null}'),
-                      child: _buildBody(),
-                    ),
+                    child: KeyedSubtree(key: ValueKey(_stage), child: _buildBody(auth)),
                   ),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AccountNudge extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AccountNudge({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.accent2.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Vrei părerea unui medic?', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+          const SizedBox(height: 6),
+          const Text(
+            'Cu un cont poți urmări evoluția leziunii în timp și poți trimite fotografia unui medic dermatolog pentru evaluare.',
+            style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onTap,
+              icon: const Icon(Icons.person_add_alt_1, size: 18),
+              label: const Text('Creează un cont'),
+            ),
+          ),
+        ],
       ),
     );
   }

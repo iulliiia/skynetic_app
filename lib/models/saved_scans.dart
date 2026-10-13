@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// A scan kept on the device. Used by guests (no account) and as the record
+/// that lets a guest scan be claimed into an account later.
 class SavedScan {
   final String imagePath;
   final int classId;
@@ -16,6 +18,13 @@ class SavedScan {
   final String? notes;
   final DateTime scanDate;
 
+  // Guest scan registered on the server (null when the upload failed or
+  // the scan predates the platform).
+  final String? remoteScanId;
+  final String? claimToken;
+  final DateTime? claimExpiresAt;
+  final DateTime? claimedAt;
+
   SavedScan({
     required this.imagePath,
     required this.classId,
@@ -27,9 +36,27 @@ class SavedScan {
     this.subBodyPart,
     this.notes,
     required this.scanDate,
+    this.remoteScanId,
+    this.claimToken,
+    this.claimExpiresAt,
+    this.claimedAt,
   });
 
-  SavedScan copyWith({String? imagePath}) {
+  /// Can still be attached to an account.
+  bool get isClaimable =>
+      remoteScanId != null &&
+      claimToken != null &&
+      claimedAt == null &&
+      (claimExpiresAt == null || claimExpiresAt!.isAfter(DateTime.now()));
+
+  SavedScan copyWith({
+    String? imagePath,
+    String? remoteScanId,
+    String? claimToken,
+    DateTime? claimExpiresAt,
+    DateTime? claimedAt,
+    bool clearClaim = false,
+  }) {
     return SavedScan(
       imagePath: imagePath ?? this.imagePath,
       classId: classId,
@@ -41,6 +68,10 @@ class SavedScan {
       subBodyPart: subBodyPart,
       notes: notes,
       scanDate: scanDate,
+      remoteScanId: clearClaim ? null : (remoteScanId ?? this.remoteScanId),
+      claimToken: clearClaim ? null : (claimToken ?? this.claimToken),
+      claimExpiresAt: clearClaim ? null : (claimExpiresAt ?? this.claimExpiresAt),
+      claimedAt: claimedAt ?? this.claimedAt,
     );
   }
 
@@ -56,6 +87,10 @@ class SavedScan {
       'subBodyPart': subBodyPart,
       'notes': notes,
       'scanDate': scanDate.toIso8601String(),
+      'remoteScanId': remoteScanId,
+      'claimToken': claimToken,
+      'claimExpiresAt': claimExpiresAt?.toIso8601String(),
+      'claimedAt': claimedAt?.toIso8601String(),
     };
   }
 
@@ -72,8 +107,14 @@ class SavedScan {
       subBodyPart: json['subBodyPart'],
       notes: json['notes'],
       scanDate: DateTime.parse(json['scanDate']),
+      remoteScanId: json['remoteScanId'],
+      claimToken: json['claimToken'],
+      claimExpiresAt: _date(json['claimExpiresAt']),
+      claimedAt: _date(json['claimedAt']),
     );
   }
+
+  static DateTime? _date(Object? v) => v is String ? DateTime.tryParse(v) : null;
 }
 
 class SavedScans {
@@ -81,14 +122,29 @@ class SavedScans {
   static const _imagesDirName = 'scans';
   static List<SavedScan> list = [];
 
-  static Future<Directory?> _imagesDir() async {
+  /// Local scans that can still be attached to an account.
+  static List<SavedScan> get claimable => list.where((s) => s.isClaimable).toList();
+
+  /// Resolves the app documents directory. Replaceable in tests, where the
+  /// platform channel behind path_provider never answers.
+  static Future<Directory?> Function() directoryResolver = _defaultDirectory;
+
+  static Future<Directory?> _defaultDirectory() async {
     try {
-      final docs = await getApplicationDocumentsDirectory();
+      return await getApplicationDocumentsDirectory().timeout(const Duration(seconds: 5));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<Directory?> _imagesDir() async {
+    final docs = await directoryResolver();
+    if (docs == null) return null;
+    try {
       final dir = Directory('${docs.path}/$_imagesDirName');
       if (!await dir.exists()) await dir.create(recursive: true);
       return dir;
     } catch (_) {
-      // path_provider is unavailable (e.g. in widget tests)
       return null;
     }
   }
@@ -130,6 +186,17 @@ class SavedScans {
 
   static Future<void> save(SavedScan scan) async {
     list.add(scan);
+    await _persist();
+  }
+
+  /// Replaces [old] with [updated] (same position) and persists.
+  static Future<void> update(SavedScan old, SavedScan updated) async {
+    final i = list.indexOf(old);
+    if (i == -1) {
+      list.add(updated);
+    } else {
+      list[i] = updated;
+    }
     await _persist();
   }
 

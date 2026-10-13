@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:skynetic_app/screens/home_screen.dart';
+import 'package:go_router/go_router.dart';
 import 'package:skynetic_app/screens/onboarding/onboarding_page.dart';
 import 'package:skynetic_app/theme/app_theme.dart';
 import 'package:skynetic_app/utils/shared_prefs.dart';
@@ -57,11 +57,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void _completeOnboarding() async {
     await SharedPrefs.setOnboardingCompleted();
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    }
+    if (mounted) context.go('/');
   }
 
   @override
